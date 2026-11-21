@@ -1,0 +1,20 @@
+{
+  "name": "Airport Canvas",
+  "release": "Airport Canvas v1.0",
+  "version": "1.0",
+  "project_extension": ".ACP",
+  "project_encoding": "UTF-8 JSON",
+  "scene_format_version": 1,
+  "default_project": "ZSQD.ACP",
+  "entry_module": "qt_app21",
+  "manual": "USER_GUIDE.md",
+  "overview": "SOFTWARE_OVERVIEW.md",
+  "validation": "VALIDATION_QT21_6_F8_CHART.md",
+  "gui_backend": "PySide6 6.12.0 / Qt Widgets",
+  "author": "刃下狼血",
+  "author_links": {
+    "Bilibili": "https://space.bilibili.com/193006350",
+    "GitHub": "https://github.com/RXLX-CHINA"
+  },
+  "license": "GPL-3.0-only"
+}

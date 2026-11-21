@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parent
+SOURCE = ROOT / 'src' / 'airport_canvas'
 BUILD = ROOT / 'build'
 DIST = BUILD / 'gui.dist'
 RELEASE = ROOT / 'release'
@@ -29,10 +30,10 @@ def main():
             iscc = str(default)
     if not args.portable_only and not iscc:
         parser.error('Install Inno Setup 6 or pass --iscc. Use --portable-only for ZIP only.')
-    config = json.loads((ROOT / 'RELEASE_MANIFEST.json').read_text(encoding='utf8'))
+    config = json.loads((SOURCE / 'RELEASE_MANIFEST.json').read_text(encoding='utf8'))
     assets = [name for name in config['files']
               if Path(name).suffix.lower() in {'.acp', '.csv', '.ico', '.png', '.qm', '.ttf'}]
-    assets += ['USER_GUIDE.md', 'SOFTWARE_OVERVIEW.md', 'CHANGELOG.md', 'QUICK_START.md', 'QUICK_START_EN.md', 'FEATURES.md', 'FEATURES_EN.md', 'VERSION.json', 'LICENSE.md', 'COPYING']
+    assets += ['USER_GUIDE.md', 'SOFTWARE_OVERVIEW.md', 'CHANGELOG.md', 'QUICK_START.md', 'QUICK_START_EN.md', 'FEATURES.md', 'FEATURES_EN.md', 'VERSION.json', 'LICENSE.md']
     command = [sys.executable, '-m', 'nuitka', '--mode=standalone', '--enable-plugin=pyside6',
                '--msvc=latest', '--windows-console-mode=disable', '--windows-icon-from-ico=AirportCanvas.ico',
                '--product-name=Airport Canvas', '--company-name=刃下狼血', '--product-version=1.0.0.0',
@@ -40,9 +41,10 @@ def main():
                f'--report={BUILD / "nuitka-report.xml"}']
     command.extend(f'--include-module={name}' for name in config['dynamic_imports'])
     command.extend(f'--include-data-files={name}={name}' for name in assets)
+    command.append(f'--include-data-files={ROOT / "COPYING"}=COPYING')
     command.append('gui.py')
     BUILD.mkdir(exist_ok=True)
-    subprocess.run(command, cwd=ROOT, check=True)
+    subprocess.run(command, cwd=SOURCE, check=True)
     if not (DIST / 'AirportCanvas.exe').is_file():
         raise SystemExit(f'Build did not produce {DIST / "AirportCanvas.exe"}')
     RELEASE.mkdir(exist_ok=True)
