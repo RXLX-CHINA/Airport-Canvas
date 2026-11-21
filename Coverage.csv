@@ -1,0 +1,72 @@
+﻿group_id,source,clause_group,feature,table_refs,figure_refs,owner,acceptance_tests,status,atomic_inventory,footnotes,figure_dimensions,implementation
+G001,S2,1.0.4;2.1.83,SMGCS and scenario model,,,scenario,T19;T20,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G002,S0,2;3.1;3.5,"Definitions, codes, data quality and facility inventory",,,scene,T04;T23;T24,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G003,S0+S1+S3,3.6,Pavement rating including revision chain and interval boundaries,3.6.3,,physical,T25,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G004,S0,3.7,Runway declared distances and intersection takeoff,,,runway,T05,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G005,S0,3.9,PAPI dependency and geometric references,,,runway,T05,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G006,S0,4.1-4.8,"Runway, shoulder, turning pad, strip, RESA, clearway, stopway and separation context",,,physical,T05;T09,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G007,S0,4.9.1,Taxiway provision and functional classification,,,physical,T03;T11,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G008,S0,4.9.2,Main wheel clearance and straight width,4.9.2-1;4.9.2-2,,physical,T11;T14,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G009,S0,4.9.3-4.9.4,"Turning geometry, intersection and fillet",,,physical,T01;T11,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G010,S0,4.9.5,Runway/taxiway/taxilane/object separation,4.9.5,,physical,T09;T14;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G011,S0,4.9.6,"Longitudinal, transverse slope and transitions",4.9.6,,physical,T11,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G012,S0,4.9.7,Taxiway sight distance,,,physical,T11,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G013,S0,4.9.8-4.9.9,"Pavement strength, friction and surface",,,physical,T25,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G014,S0,4.9.10,Rapid exit design and stopping segment,4.9.10,,physical,T11;T12,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G015,S0,4.9.11,Entry/crossing arrangement,,,physical,T03;T10,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G016,S0,4.9.12,Taxiway bridge,4.10.1,,physical,T09,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G017,S0,4.9.13,End-around taxiway,,,physical,T09,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G018,S0,4.10,Taxiway shoulders,4.10.1,,physical,T08,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G019,S0,4.11,"Taxiway strip, grading and drainage",4.11.2,,physical,T09,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G020,S0,4.12.1,Holding bay applicability,,,holding,T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G021,S0+S4,4.12.2,Runway holding positions including exit-only,,,holding,T03,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G022,S0,4.12.3-4.12.6,"Protection, holding points, road positions and table notes",4.12.6,,holding,T06;T09;T10,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G023,S0,4.13,"Apron geometry, stand clearance, equipment and shoulders",4.13.5;4.9.2-1,,apron,T13;T14;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G024,S0,4.14,"Deicing interfaces, vehicle space, slope and drainage",,,apron,T17;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G025,S0,4.15-4.16,Isolated aircraft and service road context,,,apron,T17;T26,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G026,S0+S5,5,Obstacle and protection context; future revision branch,,,protection,T09;T24,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G027,S0,6.1,"Naming, numbering and identity rules",,,scene,T04;T24,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G028,S0,6.2.1,Pairwise marking precedence and contrast,,,marking,T08;T18;T23,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G029,S0,6.2.2-6.2.7,"Runway marking interface, displaced thresholds and side stripe openings",,,marking,T05;T08;T23,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G030,S0,6.2.8(1)-(5),"Taxiway centerline continuity, breaks and exit leads",,6.2.8-1;6.2.8-2;6.2.8-3,marking,T03;T08;T18,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G031,S0+S4,6.2.8(6),Enhanced centerline branches and overlays,,6.2.8-4;6.2.8-5,marking,T03;T07;T08,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G032,S0,6.2.9,Turning pad guidance interface,,6.2.9,marking,T05,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G033,S0+S4,6.2.10,"Runway holding marking A/B, shoulders and combinations",,6.2.10-1;6.2.10-2,marking,T03;T06;T08,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G034,S0,6.2.11,"Intermediate holding, deicing exit and merging condition",,6.2.11-1;6.2.11-2,marking,T07;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G035,S0+S4,6.2.12,"Mandatory pavement instructions, exit alternatives and complex junctions",,6.2.12-1 through 6.2.12-7,marking,T03;T12;T23,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G036,S0,6.2.13,"Information, maximum span, holding identification and forbidden route guidance",,6.2.13-1 through 6.2.13-4,marking,T01;T12;T13,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G037,S0+S4,6.2.14,Load-bearing edge and holding-line break,,6.2.14,marking,T08;T18,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G038,S0+S4,6.2.15,Shoulder bars and omission envelope,,6.2.14,marking,T08,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G039,S0,6.2.16(1)-(6),"Stand lead-in, turning and alignment; all entry types",,6.2.16-1 through 6.2.16-6,stand,T13;T16,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G040,S0,6.2.16(7),Guided and unguided stop reference points,,6.2.16-7;6.2.16-8,stand,T16,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G041,S0,6.2.16(8),Multiple stand configurations,,6.2.16-9,stand,T15,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G042,S0,6.2.16(9),Pushback line and nosewheel waiting position,,6.2.16-10,stand,T14,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G043,S0,6.2.17-6.2.18,Apron and stand safety lines and overlapping regions,,6.2.18-1;6.2.18-2,apron,T15;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G044,S0,6.2.19,Wingtip clearance marking,,,apron,T14;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G045,S0,6.2.20,"Wheel chocks, waiting areas, bridge, equipment and vehicle parking",6.2.20,6.2.20-1 through 6.2.20-7,apron,T15;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G046,S0,6.2.21-6.2.23,"Pedestrian crossings, hydrants and service roads",,,road,T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G047,S0,6.2.24-6.2.26,"Closure, pre-threshold unusable pavement and calibration area context",,,marking,T05;T26,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G048,S0,7.1;7.4,General lighting and runway lighting interface,,,lighting,T05;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G049,S0,7.5.1,"Taxiway centerline: applicability, colors, spacing, offsets, photometry and circuits",,,lighting,T03;T19;T20,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G050,S0,7.5.2,Taxiway edge lights,,,lighting,T18;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G051,S0,7.5.3,Runway guard lights and active holding position,,,lighting,T06;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G052,S0,7.5.4,Intermediate holding lights,,,lighting,T07;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G053,S0,7.5.5,"Stop bars, notes, control, interlock, power and failure",,,lighting,T19;T20,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G054,S0,7.5.6,No-entry bars,,,lighting,T12;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G055,S0,7.5.7,Rapid exit indicator lights and complete configuration failure,,,lighting,T11;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G056,S0,7.5.8,Deicing exit lights,,,lighting,T17;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G057,S0,7.5.9,Turning pad lights,,,lighting,T05;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G058,S0,7.5.10,Stand maneuver guidance lights,,,lighting,T16;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G059,S0,7.5.11-7.5.13,Snow/reflective marker substitution conditions,,,lighting,T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G060,S0,7.6.9,Runway status lights; warnings separate from clearance,,,lighting,T20,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G061,S0,7.6.10,Road holding lights,,,lighting,T17;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G062,S0,8.1-8.2,"Sign classes, combinations, orientation, structure and placement",8.2.6,,signs,T03;T12;T23,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G063,S0,8.3,"Mandatory signs, viewed runway number order and prohibited entry",,8.3.2;8.3.3;8.3.6,signs,T04;T12,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G064,S0+S4,8.4,"Information, destination, exit, runway vacated, takeoff and location signs",,,signs,T03;T12;T13,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G065,S0,8 remaining sections,Stand/road signs and remaining sign applicability inventory,,,signs,T16;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G066,S0,9.1-9.3,"Apron floodlighting, power and physical protection",,,apron_equipment,T17;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G067,S0,9.4-9.5,Visual docking and advanced visual docking interfaces,,,apron_equipment,T16;T19,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G068,S0,10-11,"Lighting power/control/monitoring, redundancy and failure behavior",,,power_control,T19;T20,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G069,S0,12,Object marking and obstruction lighting context,,,protection,T09;T17,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G070,S0,Appendices E/F/H/I,"Photometry, serviceability, signs and colors, including figures and notes",,,rules,T19;T22;T23,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
+G071,S0+S1+S2+S3+S4+S5,All sources: residual references,"Unreviewed appendices, normative cross-references and external requirements",,,coverage,T22;T24;T27,MAPPED_ONLY,PENDING,PENDING,PENDING,NOT_IMPLEMENTED
