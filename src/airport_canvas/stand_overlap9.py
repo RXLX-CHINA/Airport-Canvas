@@ -54,7 +54,9 @@ def paint_boundaries(items,marks):
     safety=safety_marks(marks);lookup={a['id']:a for a in safety};out=[]
     for item in items:
         a=lookup.get(item.get('oid'))
-        if not a or item['type']!='line':out.append(item);continue
+        if not a or item['type']!='line' or item.get('ga_longitudinal_edge') is False:
+            out.append(item)
+            continue
         polygons=[b['points'] for b in safety if b['id']!=a['id']]
         length=g.length(item['points']);outside=list(outside_segments(item['points'],polygons));inside=[];cursor=0
         for points,station in outside:
@@ -110,12 +112,19 @@ def clip_merged_stand_lines(scene,items,marks):
         mark=marks.get(oid,{})
         owner=mark.get('owner') or oid
         mask=masks.get(owner)
+        stand=scene.assets.get(owner,{}).get('props',{})
+        if stand.get('ga_stand') and not item.get('ga_longitudinal_edge'):
+            result.append(item)
+            continue
         if mask is None or item['type'] not in ('line','polygon') or not item.get('stroke'):
             result.append(item)
             continue
         points=item['points']
         polygon_outline=item['type']=='polygon'
         path=LineString(points+[points[0]] if polygon_outline else points)
+        if item.get('ga_longitudinal_edge'):
+            # A flat cap at the merge boundary cannot cover the transverse paint.
+            mask=mask.buffer(item.get('width',.25)/2,join_style=2)
         if not path.intersects(mask):
             result.append(item)
             continue

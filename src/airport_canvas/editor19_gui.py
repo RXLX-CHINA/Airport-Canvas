@@ -21,7 +21,7 @@ class Editor19(Editor18):
         frame=ttk.Frame(self.tool_body);frame.pack(fill='x',before=self.tool_body.winfo_children()[0],padx=4,pady=5)
         ttk.Label(frame,text='搜索绘制工具').pack(anchor='w');self.tool_search19=tk.StringVar();entry=ttk.Entry(frame,textvariable=self.tool_search19);entry.pack(fill='x');self.tool_search19.trace_add('write',lambda *a:self.filter_tools19())
         content=self._palette_groups11[0][2]
-        for mode,label in [('REMOTE_STAND','远机位'),('AUX_STAND19','辅助机位引导线＋编号'),('HANGAR19','机库／带屋顶机位'),('TERMINAL19','航站楼主体'),('OTHER_BUILDING19','其他建筑'),('PIER19','从主体边缘挤出指廊'),('BRIDGE19','从指廊边缘挤出廊桥'),('BRIDGES19','指廊等距生成廊桥'),('NUMBER_BRIDGES19','廊桥顺序编号'),('ENHANCED19','指定长度增强中线')]:
+        for mode,label in [('REMOTE_STAND','远机位'),('GA_STAND','通航机场机位'),('HELI_STAND','直升机坪（带引入线）'),('AUX_STAND19','辅助机位引导线＋编号'),('HANGAR19','机库／带屋顶机位'),('TERMINAL19','航站楼主体'),('OTHER_BUILDING19','其他建筑'),('PIER19','从主体边缘挤出指廊'),('BRIDGE19','从指廊边缘挤出廊桥'),('BRIDGES19','指廊等距生成廊桥'),('NUMBER_BRIDGES19','廊桥顺序编号'),('ENHANCED19','指定长度增强中线')]:
             b=ttk.Button(content,text=label,style='Item11.TButton',command=lambda m=mode:self.set_mode(m));b.pack(fill='x',pady=1);self.tool_buttons[mode]=b;self.tip11(b,label)
         from qt_core21 import C,G
         icon=G.QPixmap(24,24)
@@ -86,13 +86,26 @@ class Editor19(Editor18):
             if self._prefab19=='REMOTE_STAND':
                 p['has_bridge']=False
                 for field in ('work_zone_left','work_zone_right'):p.setdefault(field,WORK_ZONES59[0])
+            elif self._prefab19=='GA_STAND':
+                from stand13 import ga_stand_props
+                p.update(ga_stand_props())
+            elif self._prefab19=='HELI_STAND':
+                from stand13 import helicopter_stand_props
+                p.update(helicopter_stand_props())
+                p.update(aircraft_span=12.,aircraft_length=12.)
             elif not self._prefab19:
                 p.setdefault('work_zone',WORK_ZONES59[0])
                 p.setdefault('work_zone_bridge_side',NO_WORK_ZONE)
         if mode=='STAND' and self._prefab19=='HANGAR19':p.update(hangar19=True,has_bridge=False)
         return p
+    def highlight_tool(self,mode=None):
+        active=mode or self.mode
+        if active=='STAND':
+            active=self._prefab19 or active
+        return super().highlight_tool(active)
+
     def set_mode(self,mode):
-        self._custom19=None;self._anchor19=None;self._polygon19=[];self._label_drag19=None;self._prefab19=mode if mode in ('AUX_STAND19','HANGAR19','REMOTE_STAND') else None
+        self._custom19=None;self._anchor19=None;self._polygon19=[];self._label_drag19=None;self._prefab19=mode if mode in ('AUX_STAND19','HANGAR19','REMOTE_STAND','GA_STAND','HELI_STAND') else None
         if mode in CUSTOM:
             super().set_mode('SELECT');self.mode=mode;self._custom19=mode;self._draft11=None;self.update_inspector();self.redraw();return
         return super().set_mode('STAND' if self._prefab19 else mode)
@@ -128,7 +141,10 @@ class Editor19(Editor18):
             try:
                 for key in ('auxiliary','show_safety','stand_support','hangar19'):self.hide_field11('_draft_'+key)
                 sec=self.section('预制组成')
-                for key,label in [('auxiliary','辅助机位虚线'),('show_safety','机位安全线'),('stand_support','作业区与轮挡区'),('hangar19','机库屋顶')]:self.property_field(sec,'_draft_'+key,label,self._draft_values11.get(key,False),'bool')
+                if self._prefab19=='GA_STAND':
+                    self.property_field(sec,'_draft_show_safety','显示机位线框',self._draft_values11.get('show_safety',True),'bool')
+                elif self._prefab19!='HELI_STAND':
+                    for key,label in [('auxiliary','辅助机位虚线'),('show_safety','机位安全线'),('stand_support','作业区与轮挡区'),('hangar19','机库屋顶')]:self.property_field(sec,'_draft_'+key,label,self._draft_values11.get(key,False),'bool')
             finally:self._inspector_busy=False
             self.ensure_book15().actions(self.property_body);self._book15.tidy()
         if not a:return

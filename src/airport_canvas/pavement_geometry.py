@@ -17,8 +17,20 @@ def offset(points,value):
         out.append(hit if hit and g.distance(hit,p)<max(.01,abs(value)*4) else [(a[0]+b[0])/2,(a[1]+b[1])/2])
     return out
 
+def corridor_parts(points,width):
+    ring=offset(points,width/2)+list(reversed(offset(points,-width/2)))
+    if len(points)<3:return [ring]
+    from geometry11 import LineString,Polygon,polygons
+    if Polygon(ring).is_valid:return [ring]
+    # When the inside radius collapses, the swept footprint has no inside
+    # offset loop. Rebuild the outline from the path instead of polygonizing
+    # the intersecting offset segments into phantom islands.
+    swept=LineString(points).buffer(width/2,cap_style=2,join_style=1)
+    return [[list(q) for q in part.exterior.coords][:-1] for part in polygons(swept)]
+
 def corridor(points,width):
-    return offset(points,width/2)+list(reversed(offset(points,-width/2)))
+    """Return the main outline for callers that consume one ring."""
+    return max(corridor_parts(points,width),key=lambda ring:abs(area(ring)),default=[])
 
 def area(poly):return sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(poly,poly[1:]+poly[:1]))/2
 
@@ -236,7 +248,6 @@ def fillets(scene,junction,outer=False):
     return patches
 
 def turn_guides(scene,junction,visible_only=True,endpoint_budgets=None):
-    if any(scene.assets.get(aid,{}).get('props',{}).get('rapid_exit') for aid in junction['assets']):return []
     if endpoint_budgets is None and any(scene.assets.get(aid,{}).get('props',{}).get('terminal_backup13') for aid in junction['assets']):
         candidate=rounded_terminal_joins(scene,crossings(scene))[1].get(junction['id'])
         if candidate:
@@ -265,7 +276,7 @@ def turn_guides(scene,junction,visible_only=True,endpoint_budgets=None):
             oa,reach_a=junction_arm(a['points'],junction['stations'][0],side_a)
             ob,reach_b=junction_arm(b['points'],junction['stations'][1],side_b)
             angle=math.acos(max(-.99999,min(.99999,sum(x*y for x,y in zip(oa,ob)))))
-            if not math.radians(15)<angle<math.radians(165):continue
+            if not math.radians(15)<angle<math.radians(178):continue
             available=[reach_a,reach_b]
             if min(available)<.01:continue
             if endpoint_budgets:
@@ -273,8 +284,6 @@ def turn_guides(scene,junction,visible_only=True,endpoint_budgets=None):
             local_radius=radius
             tangent=local_radius/math.tan(angle/2)
             if min(available)<tangent:
-                endpoint=any(min(s,g.length(route['points'])-s)<.12 for s,route in zip(junction['stations'],(a,b)))
-                if not endpoint:continue
                 tangent=min(available)*.98
                 local_radius=tangent*math.tan(angle/2)
             c=junction['point'];p=[c[i]+oa[i]*tangent for i in (0,1)];q=[c[i]+ob[i]*tangent for i in (0,1)]
@@ -287,7 +296,9 @@ def turn_guides(scene,junction,visible_only=True,endpoint_budgets=None):
                 target=g.at(route['points'],station+side*tangent)[0]
                 delta=[target[k]-arc[endpoint][k] for k in (0,1)]
                 displacement=math.hypot(*delta)
-                if displacement<1e-6:continue
+                if displacement<1e-6:
+                    arc[endpoint]=target
+                    continue
                 span=min(arc_length*.45,max(3*displacement,arc_length*.18))
                 distance=0.
                 indices=range(len(arc)) if index==0 else range(len(arc)-1,-1,-1)
@@ -300,6 +311,25 @@ def turn_guides(scene,junction,visible_only=True,endpoint_budgets=None):
                     t=1-distance/span
                     weight=t*t*(3-2*t)
                     arc[i]=[point[k]+weight*delta[k] for k in (0,1)]
+            # A curved arm can turn appreciably between the intersection and
+            # the contact station. Match the live centreline tangent there.
+            contacts=[]
+            for route,station,side,travel in ((a,junction['stations'][0],side_a,-side_a),
+                                              (b,junction['stations'][1],side_b,side_b)):
+                _,direction=g.at(route['points'],station+side*tangent)
+                contacts.append([travel*value for value in direction])
+            tangents=(g.unit(arc[0],arc[1]),g.unit(arc[-2],arc[-1]))
+            from shapely.geometry import LineString
+            if (not LineString(arc).is_simple or
+                any(sum(x*y for x,y in zip(actual,wanted))<.995
+                    for actual,wanted in zip(tangents,contacts))):
+                handle=min(g.distance(arc[0],arc[-1])*.45,arc_length/3)
+                for scale in (1,.5,.25,.125):
+                    candidate=g.cubic(arc[0],arc[-1],*contacts,handle*scale,steps=48)
+                    if LineString(candidate).is_simple:
+                        arc=candidate
+                        break
+                else:continue
             result.append(dict(key=key,points=arc,label=f'{a["name"]} {"起点侧" if side_a<0 else "终点侧"} ↔ {b["name"]} {"起点侧" if side_b<0 else "终点侧"}'))
     return result
 
@@ -333,7 +363,8 @@ def rounded_terminal_joins(scene,junctions):
         for aid,L,station,direction in zip(ids,lengths,ends,directions):
             lo,hi=trims.get(aid,(0,L))
             trims[aid]=(station,hi) if direction==1 else (lo,station)
-        tangent_a,tangent_b=junction['tangents']
+        _,tangent_a=g.at(assets[0]['points'],ends[0])
+        _,tangent_b=g.at(assets[1]['points'],ends[1])
         entry=[-directions[0]*n for n in tangent_a]
         exit=[directions[1]*n for n in tangent_b]
         bands[junction['id']]=(arc,assets,entry,exit)

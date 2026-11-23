@@ -9,6 +9,15 @@ def remote_exit_hit(scene,point,tolerance):
     from guidance20 import snap_axis
     return snap_axis(scene,point,{oid:axis for oid,axis in axes(scene).items() if axis['kind'] in TAXIS},tolerance)
 
+def draw_exit_snap(editor,hit,tag):
+    from interface_language import tr
+    x,y=editor.screen(hit[3])
+    color='#35bbd3'
+    editor.canvas.create_oval(x-5,y-5,x+5,y+5,outline=color,width=2,tags=tag)
+    editor.canvas.create_text(x,y-12,text=tr('引出线吸附至滑行道中线'),
+                              fill=color,anchor='s',tags=tag)
+
+
 def remote_stand_props(hit):
     return dict(remote_stand=True,has_bridge=False,show_safety=True,
                 exit_asset=hit[1],exit_station=hit[2])
@@ -139,7 +148,7 @@ def design(a,scene=None):
     if not branches:return base
     label_frame=approach_frame(a) if kind!='C' else a
     canonical=next((b for b in branches if b['key']=='1'),branches[0]);L=g.length(canonical['points']);station=p.get('label_station14',{}).get('paired',canonical['default_station']/max(L,.01))*L
-    station=max(h+margin,min(max(h+margin,L-h-margin),station));q,u=g.at(canonical['points'],station)
+    station=min(L,max(h+margin,min(max(h+margin,L-h-margin),station)));q,u=g.at(canonical['points'],station)
     if canonical['key']=='-1':
         q=reflected(label_frame,q);_,axis,normal=frame(label_frame);u=[axis[k]*sum(u[j]*axis[j] for j in (0,1))-normal[k]*sum(u[j]*normal[j] for j in (0,1)) for k in (0,1)]
     for b in branches:
@@ -158,8 +167,15 @@ def design(a,scene=None):
         align['points'][0]=branches[0]['points'][-1]
         if g.distance(*[align['points'][i] for i in (0,-1)])>.01:full.append(align)
     if kind=='C':full=[dict(key='DIRECT',points=canonical['points'])]
+    if p.get('ga_stand') or not p.get('show_number',True):
+        base.update(paths=full,numbers=[],full_paths15=full)
+        return base
     masks=[]
-    for n in numbers:
+    for index,n in enumerate(numbers):
+        if scene is not None:
+            mark_id='AUTO:'+a['id']+':STAND_NUMBER'+(':'+str(index) if index else '')
+            if scene.data['generated_overrides'].get(mark_id,{}).get('hidden'):
+                continue
         m=dict(id='plate',points=[n['point'],[n['point'][k]+n['direction'][k]*10 for k in (0,1)]],props=dict(mark_type='STAND_NUMBER',text=p.get('stand_number',a.get('name','101')),text_height=h))
         shape=next(x for x in primitives(m) if x['type']=='polygon');masks.append(polygon(shape['points']).buffer(margin,join_style=2))
     mask=unary_union(masks);paths=[]

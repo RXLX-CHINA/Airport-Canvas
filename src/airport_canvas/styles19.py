@@ -25,10 +25,6 @@ def normalize(scene,marks,reposition=False):
         if key=='RWY_CIRCLE' and root and root['kind']=='RUNWAY':
             from scene_render import runway_center_width
             p.update(width=root['props']['width']/2,line_width=runway_center_width(scene,root))
-        if key=='HOLD_A' and a.get('owner'):
-            movement=scene.movements.get(a['owner'])
-            taxi=next((scene.assets[movement[side]['asset']] for side in ('from','to') if scene.assets[movement[side]['asset']]['kind']!='RUNWAY'),None) if movement else root
-            if taxi:p['width']=taxi['props']['width']+(2*taxi['props'].get('shoulder',0) if taxi['props'].get('hold_include_shoulders13',True) else 0)
         if key=='ROAD_STOP':p['red_background']=True
         if key=='BRIDGE_COMPOSITE' and a.get('owner') in scene.assets:
             p['home_white19']=scene.assets[a['owner']]['props'].get('home_white19',False)

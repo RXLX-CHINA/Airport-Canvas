@@ -172,6 +172,13 @@ def reverse_join(scene,m):
     branch=points
     return dict(points=branch,station=p['station'],direction=p['direction'],layout=p)
 
+def reverse_surface(scene,model,guide):
+    radius=model.get('reverse_surface_radius',0)
+    if not radius or not guide:return guide
+    surface=reverse_join(scene,dict(model,reverse_join_radius=radius))
+    if surface is None:raise ValueError('反向道面半径无法连接接收滑行道。')
+    return dict(guide,points=surface['points'],station=surface['station'])
+
 def configure_rapid(scene,mid,**props):
     with scene.transaction('快速出口自动拟合'):
         m=scene.movements[mid];m.update(props,geometry='RAPID',role='RAPID_EXIT',bidirectional=False,auto_branches=True)

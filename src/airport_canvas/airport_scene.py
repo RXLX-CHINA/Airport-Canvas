@@ -330,7 +330,11 @@ class AirportScene:
                 from curve_model import sync_authoring
                 sync_authoring(a,points)
                 a['points']=copy.deepcopy(points)
-            if props:a['props'].update(copy.deepcopy(props))
+            if props:
+                if (a['kind']=='MARKING' and a['props'].get('mark_type') in ('HOLD_A','HOLD_B')
+                        and 'width' in props and props['width']!=a['props'].get('width')):
+                    a['props']['hold_width_manual']=True
+                a['props'].update(copy.deepcopy(props))
             if a['props'].get('deice_layout12'):a['points']=__import__('deice12').layout(self,a)['pavement']
             if a['kind']=='STAND':
                 p=a['props'];parent=p.get('entry_asset')

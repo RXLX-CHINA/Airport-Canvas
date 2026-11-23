@@ -4,11 +4,16 @@ from pavement_geometry import halfplane
 
 def trim_shoulders(scene,surfaces):
     from marks11 import legacy_reverse_routes
-    from pavement_geometry import corridor,exclude_runways
+    from pavement_geometry import corridor_parts,exclude_runways
     from geometry11 import polygon,polygons,unary_union
     runways=surfaces['runways'];aprons=unary_union([polygon(a['points']) for a in scene.assets.values() if a['kind']=='APRON'])
     for branch in legacy_reverse_routes(scene).values():
         aid=branch['owner'];p=branch['props'];path=branch['points']
+        if p.get('rapid_geometry39',{}).get('reverse_surface_radius'):
+            from rapid_editor39 import source
+            from smart_routes import reverse_surface
+            state=source(scene,aid)
+            if state:path=reverse_surface(scene,state[0],branch)['points']
         target=scene.assets[branch['target']]['points']
         receiver,_=g.at(target,branch['target_from'])
         trunk=branch['source_path']
@@ -20,7 +25,7 @@ def trim_shoulders(scene,surfaces):
         _,reverse_end,_=g.project(target,path[-1])
         lo,hi=sorted((main_end,reverse_end));across=g.subpath(target,lo,hi)
         if main_end>reverse_end:across.reverse()
-        pieces=[corridor(path,p['width'])]
+        pieces=corridor_parts(path,p['width'])
         fork=source+across[1:]+list(reversed(path))[1:]
         from shapely import Polygon
         if len(fork)>2:
@@ -33,7 +38,9 @@ def trim_shoulders(scene,surfaces):
         from pavement_geometry import shoulder_width
         shoulder=shoulder_width(scene.assets[aid]['kind'],p)
         if shoulder:
-            for piece in exclude_runways(corridor(path,p['width']+2*shoulder),runways):surfaces['shoulders'].append(dict(oid=aid+':reverse11',kind='TAXIWAY',points=piece))
+            for outline in corridor_parts(path,p['width']+2*shoulder):
+                for piece in exclude_runways(outline,runways):
+                    surfaces['shoulders'].append(dict(oid=aid+':reverse11',kind='TAXIWAY',points=piece))
     constraints=[]
     for m in scene.movements.values():
         for side,other in [('from','to'),('to','from')]:
@@ -44,11 +51,34 @@ def trim_shoulders(scene,surfaces):
             start=station<total/2;q=r['points'][0 if start else -1];u=g.unit(r['points'][0],r['points'][-1]);v=[-u[1],u[0]]
             edge=[q[k]+v[k]*(-1 if start else 1) for k in (0,1)]
             constraints.append((m[other]['asset'],m['id'],q,edge))
+    from pavement_geometry import crossings,route_objects
+    routes=route_objects(scene)
+    banks={}
+    for junction in crossings(scene):
+        pair=[routes[key] for key in junction['assets']]
+        for runway,connector in (pair,pair[::-1]):
+            if runway['kind']!='RUNWAY' or connector['kind']=='RUNWAY':continue
+            start,end=runway['points']
+            ux,uy=g.unit(start,end)
+            offsets=[ux*(y-start[1])-uy*(x-start[0]) for x,y in connector['points']]
+            half=runway['props']['width']/2
+            if max(offsets)>half and min(offsets)>=-half:
+                plane=(start,end)
+            elif min(offsets)<-half and max(offsets)<=half:
+                plane=(end,start)
+            else:continue
+            for owner in (junction['id'],connector['id']):
+                banks.setdefault(owner,[]).append(plane)
     result=[]
     from shapely.ops import triangulate
     for piece in surfaces['shoulders']:
         points=piece['points'];oid=piece['oid']
         if piece['kind']!='RUNWAY':
+            owner=oid
+            while owner:
+                for start,end in banks.get(owner,()):
+                    points=halfplane(points,start,end)
+                owner=owner.rpartition(':')[0]
             for aid,mid,q,edge in constraints:
                 if aid in oid or oid.startswith(mid):points=halfplane(points,q,edge)
                 if not points:break

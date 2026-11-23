@@ -3,24 +3,64 @@ import hashlib,math
 from collections import defaultdict
 import scene_geometry as g
 TAXIS=('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE')
-def junction_cuts(scene,junctions,axes):
-    """Stations where rendered straight guidance gives way to turn arcs."""
+def junction_cuts(scene,junctions,axes,guides_by_junction=None):
+    """Trim junction stubs without consuming another guide's contact."""
     from pavement_geometry import turn_guides
+
     cuts=defaultdict(list)
+    contacts=defaultdict(list)
     for junction in junctions:
-        config=scene.data.get('junctions',{}).get(junction['id'],{})
-        guides=None
+        jid=junction['id']
+        config=scene.data.get('junctions',{}).get(jid,{})
+        guides=(turn_guides(scene,junction) if guides_by_junction is None
+                else guides_by_junction.get(jid,()))
+        if not guides:continue
         for index,oid in enumerate(junction['assets']):
             axis=axes.get(oid)
             if not axis or axis['kind']=='RUNWAY':continue
+            points=axis['points']
+            total=g.length(points)
             station=junction['stations'][index]
-            if min(station,g.length(axis['points'])-station)>=1 and config.get(f'straight_{index}',True):
-                continue
-            if guides is None:guides=turn_guides(scene,junction,visible_only=False)
             edge=0 if index==0 else -1
-            joins=[g.project(axis['points'],guide['points'][edge])[1] for guide in guides]
-            if joins:cuts[oid].append((min(station,*joins),max(station,*joins)))
-    return cuts
+            joins=[g.project(points,guide['points'][edge])[1] for guide in guides]
+            contacts[oid].extend(joins)
+            inward=[s for s in joins if s>station+1e-6]
+            outward=[s for s in joins if s<station-1e-6]
+            if station<1 and inward:
+                cuts[oid].append((0.,min(inward)))
+            elif total-station<1 and outward:
+                cuts[oid].append((max(outward),total))
+            elif not config.get(f'straight_{index}',True):
+                cuts[oid].append((max(outward,default=station),min(inward,default=station)))
+
+    # Explicit connectors also land on the parent axis, including at its ends.
+    for movement in scene.movements.values():
+        if movement.get('legacy_attachment') or not movement.get('guide_visible',True):continue
+        for side in ('from','to'):
+            port=movement[side]
+            if port['asset'] in cuts:
+                contacts[port['asset']].append(port['station'])
+
+    result={}
+    for oid,gaps in cuts.items():
+        total=g.length(axes[oid]['points'])
+        safe=[]
+        for lo,hi in gaps:
+            # Keep a short visible span at contacts shared with nearby junctions.
+            if lo<=1e-6:
+                hi=min(hi,min((s-.02 for s in contacts[oid] if s<hi-1e-6),default=hi))
+            elif hi>=total-1e-6:
+                lo=max(lo,max((s+.02 for s in contacts[oid] if s>lo+1e-6),default=lo))
+            elif any(lo+1e-6<s<hi-1e-6 for s in contacts[oid]):
+                continue
+            if hi-lo>1e-6:safe.append((lo,hi))
+        start_edge=max((hi for lo,hi in safe if lo<=1e-6),default=0.)
+        end_edge=min((lo for lo,hi in safe if hi>=total-1e-6),default=total)
+        if 0<start_edge<=end_edge<total and end_edge-start_edge<.02:
+            safe=[(lo,min(hi,max(0.,end_edge-.02))) if lo<=1e-6 else (lo,hi)
+                  for lo,hi in safe]
+        if safe:result[oid]=[(lo,hi) for lo,hi in safe if hi-lo>1e-6]
+    return result
 
 def visible_intervals(axis):
     end=g.length(axis['points'])
@@ -93,7 +133,7 @@ def routes(scene):
                              flow='BOTH',guidance_owner20=axes[0]['id'],junction20=j['id']))
     for aid,a in base.items():
         total=g.length(a['points'])
-        gaps=sorted(cuts[aid])
+        gaps=sorted(cuts.get(aid,()))
         lo,hi=0.,total
         for start,end in gaps:
             if start<=lo+1e-6:lo=max(lo,end)

@@ -1,5 +1,6 @@
 """One rapid-exit geometry editor for drawn and connected taxiways."""
 import math
+from interface_language import tr
 import scene_geometry as g
 from smart_routes import rapid_layout,layout_path,reverse_join,recommended_radius
 
@@ -10,6 +11,7 @@ FIELDS=(
     ('rapid_taxi_stub','滑行道侧短联络直线段（0 为直接并入）',0.),
     ('reverse_exit_radius','跑道端反向半径',550.),
     ('reverse_join_radius','滑行道端反向半径',25.),
+    ('reverse_surface_radius','滑行道端反向道面轴线半径（0 跟随中线）',0.),
     ('reverse_rapid_exact_straight','反向直线段（0 为自动）',0.),
 )
 
@@ -67,11 +69,14 @@ def plans(scene,model,values):
     for key,_,_ in FIELDS:
         value=configured.get(key)
         if value is None:continue
+        if key=='reverse_surface_radius' and value==0:continue
         minimum=0 if 'straight' in key or key=='rapid_taxi_stub' else configured['width']/2
         if not math.isfinite(value) or value<minimum or (minimum>0 and value==minimum):
             raise ValueError('半径须大于半幅道面宽度，直线段长度须为非负数。')
     forward=rapid_layout(scene,configured)
     reverse=reverse_join(scene,configured)
+    from smart_routes import reverse_surface
+    reverse_surface(scene,configured,reverse)
     return forward,reverse
 
 def apply(scene,oid,values):
@@ -111,7 +116,7 @@ def open_dialog(editor):
         return
     model=state[0]
     window=QtWidgets.QDialog(editor.q)
-    window.setWindowTitle('快速脱离道几何')
+    window.setWindowTitle(tr('快速脱离道几何'))
     window.setMinimumWidth(390)
     layout=QtWidgets.QFormLayout(window)
     fields={}
@@ -124,7 +129,7 @@ def open_dialog(editor):
         fallback=key if 'straight' in key or key=='rapid_taxi_stub' else key.removeprefix('reverse_')
         field.setValue(model.get(key,model.get(fallback,defaults.get(fallback,default))))
         fields[key]=field
-        layout.addRow(label,field)
+        layout.addRow(tr(label),field)
     message=QtWidgets.QLabel()
     message.setWordWrap(True)
     layout.addRow(message)
@@ -132,7 +137,7 @@ def open_dialog(editor):
                                       QtWidgets.QDialogButtonBox.StandardButton.Cancel)
     layout.addRow(buttons)
     apply_button=buttons.button(QtWidgets.QDialogButtonBox.StandardButton.Apply)
-    apply_button.setText('应用')
+    apply_button.setText(tr('应用'))
     timer=QtCore.QTimer(window)
     timer.setSingleShot(True)
     timer.setInterval(70)
@@ -152,21 +157,25 @@ def open_dialog(editor):
                 raise ValueError('无法拟合指定长度的反向直线段。')
             from pavement_geometry import offset
             paths=[(layout_path(forward),'#168ad1')]
-            if reverse:paths.append((reverse['points'],'#e25969'))
+            if reverse:
+                from smart_routes import reverse_surface
+                surface=reverse_surface(editor.scene,dict(model,**values()),reverse)
+                paths.append((surface['points'],'#e25969'))
             for points,color in paths:
-                for line in (points,offset(points,model['width']/2),offset(points,-model['width']/2)):
+                axis=reverse['points'] if reverse and color=='#e25969' else points
+                for line in (axis,offset(points,model['width']/2),offset(points,-model['width']/2)):
                     canvas.create_line(*[v for q in line for v in editor.screen(q)],
                                        fill=color,width=2,tags='rapid_preview39')
-            reverse_text=f'{reverse["layout"]["straight"]:.1f} m' if reverse else '当前几何无可用反向汇入'
-            message.setText(f'实际直线段：正向 {forward["straight"]:.1f} m，反向 {reverse_text}')
+            reverse_text=f'{reverse["layout"]["straight"]:.1f} m' if reverse else tr('当前几何无可用反向汇入')
+            message.setText(tr('实际直线段：正向 {forward:.1f} m，反向 {reverse}').format(forward=forward['straight'],reverse=reverse_text))
             apply_button.setEnabled(True)
         except ValueError as error:
-            message.setText(str(error))
+            message.setText(tr(str(error)))
             apply_button.setEnabled(False)
 
     def commit():
         try:apply(editor.scene,oid,values())
-        except ValueError as error:message.setText(str(error));return
+        except ValueError as error:message.setText(tr(str(error)));return
         window.accept()
         editor.refresh()
 

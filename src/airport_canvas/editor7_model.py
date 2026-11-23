@@ -93,7 +93,7 @@ def _legacy_move_anchor(scene,mid,branch,index,p):
             port['station']=station
             if m.get('follow_existing'):
                 from connection9 import existing_plan
-                plan=existing_plan(scene,m['from'],m['to'])
+                plan=existing_plan(scene,m['from'],m['to'],radius=m.get('join_radius',25))
                 if plan:m['bezier_controls']=plan['controls']
                 else:raise ValueError('移动后的连接不符合现有中线流向')
                 return

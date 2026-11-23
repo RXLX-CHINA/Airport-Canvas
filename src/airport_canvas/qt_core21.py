@@ -468,9 +468,11 @@ class Combobox(Widget):
                 if 'values' in kw:
                     self.q.clear()
                     from interface_language import tr
-                    for value in kw['values']:
+                    values=kw['values']
+                    for value in values:
                         raw=str(value)
-                        caption=raw if self.q.isEditable() else tr(raw,enum=True)
+                        label=values[value] if isinstance(values,dict) else raw
+                        caption=raw if self.q.isEditable() else tr(label,enum=True)
                         self.q.addItem(caption,raw)
                 self.set(desired)
         super().configure(**kw)

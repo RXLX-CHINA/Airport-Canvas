@@ -116,6 +116,17 @@ def fit_mandatory(mark):
     mark['points']=[anchor,[anchor[k]+u[k]*10 for k in (0,1)]]
 
 
+REMOVABLE_RUNWAY_MARKS = frozenset(('MANDATORY','TWY_ENHANCED'))
+
+
+def remove_runway_instruction_markings(scene):
+    ids=[aid for aid,asset in scene.assets.items()
+         if asset['kind']=='MARKING' and asset['props']['mark_type'] in REMOVABLE_RUNWAY_MARKS]
+    with scene.transaction('去除强制性指令标识和增强型中线'):
+        for aid in ids:scene.delete(aid)
+        scene.data['meta']['suppress_runway_instruction_markings']=True
+
+
 def generated_markings(scene,apply_overrides=True):
     result={}
     def add(owner,key,pts,suffix='',**p):
@@ -126,6 +137,12 @@ def generated_markings(scene,apply_overrides=True):
             result.update(runway_components(a))
         elif a['kind']=='STAND' and p.get('auto_markings',True):
             length=g.length(pts);u=g.unit(pts[0],pts[-1]);q=pts[-1]
+            if p.get('helicopter_stand'):
+                from stand15 import rounded_lead
+                add(aid,'LEAD_IN',rounded_lead(a),'HELIPAD_LEAD_IN',line_width=max(.15,p.get('lead_width',.15)))
+                add(aid,'HELIPAD',[q,[q[k]+u[k]*10 for k in (0,1)]],'HELIPAD',
+                    width=p.get('aircraft_span',12),number=p.get('stand_number') or a['name'])
+                continue
             from stand_profiles import lead_design
             design=lead_design(a,scene)
             from stand10 import bridge
@@ -135,7 +152,7 @@ def generated_markings(scene,apply_overrides=True):
             for part in design['paths']:
                 suffix='LEAD_IN' if part['key']=='ALIGN' else 'LEAD_BRANCH:'+part['key']
                 add(aid,'LEAD_IN',part['points'],suffix,line_width=max(.15,p.get('lead_width',.15)),dash=2 if p.get('auxiliary',False) else None,gap=2)
-            if p.get('show_number',True):
+            if p.get('show_number',True) and not p.get('ga_stand'):
                 for i,n in enumerate(design['numbers']):
                     origin=n['point'];direction=n['direction']
                     add(aid,'STAND_NUMBER',[origin,[origin[k]+direction[k]*10 for k in (0,1)]],'STAND_NUMBER' if i==0 else 'STAND_NUMBER:'+str(i),text=p.get('stand_number') or a['name'],text_height=p.get('number_height',4.),text_rotation_offset=n['text_rotation_offset'])
@@ -145,22 +162,28 @@ def generated_markings(scene,apply_overrides=True):
                 from stand15 import remote_exit_lines
                 for index,path in enumerate(remote_exit_lines(a,scene)):
                     add(aid,'LEAD_OUT',path,f'REMOTE_EXIT:{index}',line_width=max(.15,p.get('lead_width',.15)))
-            if p.get('show_safety',False):
+            if p.get('show_safety',bool(p.get('ga_stand'))):
                 from stand_profiles import safety_profile
                 polygon=safety_profile(scene,a)
-                add(aid,'STAND_SAFETY',polygon,line_width=.1,dash=2 if p.get('auxiliary',False) else None,gap=2,continuous_safety14=True,open_stand_nose58=p.get('remote_stand',False))
+                if p.get('ga_stand'):
+                    from stand13 import ga_color
+                    add(aid,'STAND_SAFETY',polygon,ga_frame_color=ga_color(p,'ga_frame_color'),
+                        ga_outline_color=ga_color(p,'ga_outline_color'))
+                else:
+                    add(aid,'STAND_SAFETY',polygon,line_width=.1,dash=2 if p.get('auxiliary',False) else None,gap=2,continuous_safety14=True,open_stand_nose58=p.get('remote_stand',False))
         elif a['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE') and p.get('auto_markings',True) and p.get('auto_signs',True):
             q,u=g.at(pts,g.length(pts)*.5);v=(-u[1],u[0]);q=[q[k]+-v[k]*(p['width']/4) for k in (0,1)]
             add(aid,'LOCATION',[q,[q[k]+u[k]*10 for k in (0,1)]],text=p.get('designation') or (__import__('re').match(r'[A-Za-z][A-Za-z0-9]*',a['name']).group() if __import__('re').match(r'[A-Za-z][A-Za-z0-9]*',a['name']) else 'T'),text_height=4)
             if p.get('maxspan'):
                 q,u=g.at(pts,min(30,g.length(pts)*.2));add(aid,'MAX_SPAN',[q,[q[k]+u[k]*10 for k in (0,1)]],text='MAX SPAN '+str(p['maxspan'])+' m',maxspan=p['maxspan'])
+    suppress_instructions=scene.data['meta'].get('suppress_runway_instruction_markings',False)
     for h in holding_locations(scene):
         owner=h['owner'];q=h['point'];u=h['tangent'];v=(-u[1],u[0]);key=h['key']
         add(owner,'HOLD_A',[q,[q[k]+u[k]*10 for k in (0,1)]],key+':HOLD_A',width=h['span'])
         movement=scene.movements.get(owner,{})
-        if movement.get('show_enhanced',True):
+        if not suppress_instructions and movement.get('show_enhanced',True):
             add(owner,'TWY_ENHANCED',h['enhanced'],key+':TWY_ENHANCED')
-        if not h['auto_signs']:continue
+        if suppress_instructions or not h['auto_signs']:continue
         r=scene.assets[h['runway']];text=r['props'].get('label_a','09')+'-'+r['props'].get('label_b','27');height=2 if h['code_letter'] in ('A','B') else 4
         text_width=len(text)*height*.6;background_width=text_width+1
         settings=scene.movements.get(owner,scene.assets.get(owner,{}).get('props',{}));paired=settings.get('paired_mandatory20_2',True)

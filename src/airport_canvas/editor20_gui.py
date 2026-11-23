@@ -28,6 +28,7 @@ class Editor20(Editor19):
         super().__init__(scene)
         menu=self.nametowidget(self.cget('menu'));tools=tk.Menu(menu,tearoff=False);menu.add_cascade(label='机场修正',menu=tools);tools.add_command(label='统一 NO ENTRY 尺寸／检查最窄处',command=self.no_entry_dialog20)
         tools.add_command(label='统一跑道编号强制指令标识',command=self.standardize_mandatory20)
+        tools.add_command(label='去除强制性指令标识和增强型中线',command=self.remove_runway_instruction_markings20)
     def update_title(self):super().update_title();self.title(self.title().replace('19.0','20.18'))
     def tree_select(self,e=None):
         if len(self.__dict__.get('selected_ids',set()))>1 and set(self.tree.selection())==self.selected_ids:return
@@ -94,12 +95,14 @@ class Editor20(Editor19):
         self._bridge_drag20_6=None;self._bridge_handle20_6=None
         self.clear_previews20();self._entry_drag20=None;self._entry_handle20=None
         result=super().set_mode(mode)
-        if mode in ('TRUNCATE20_18','APRON_RECT20_18','APRON_TRAP20_18','APRON_CARGO23','APRON_RUNUP23'):
+        if mode in ('TRUNCATE20_18','APRON_RECT20_18','APRON_TRAP20_18','APRON_CARGO23','APRON_RUNUP23','APRON_DEICE_POLY'):
             self._draft11=None
             self.update_inspector()
             if mode=='TRUNCATE20_18':
                 end='右端' if self.__dict__.get('_truncate_right21_2') else '左端'
                 self.status.set(f'末端截断：左键确认删除{end}，右键／Esc取消')
+            elif mode in __import__('workspace20_18').SPECIAL_APRONS:
+                self.status.set('逐点绘制机坪边界，按 Enter 完成。')
             else:
                 self.status.set('机坪绘制：选择两个对角点，右键取消')
         return result
@@ -348,6 +351,8 @@ class Editor20(Editor19):
                 q,u=g.at(a['points'],part['hi']*L);v=[-u[1],u[0]];points=[[q[k]+sign*half*v[k] for k in (0,1)] for sign in (-1,1)]
                 self.canvas.create_line(*[value for p in points for value in self.screen(p)],fill='#7b507f',width=1,dash=(3,3),tags='segment_cuts20_14')
     def finish_draw(self):
+        from workspace20_18 import SPECIAL_APRONS,finish_special_apron
+        if self.mode in SPECIAL_APRONS:return finish_special_apron(self)
         if self.mode=='SPLIT7':
             if self.route17.pending:self.commit_route17()
             return
@@ -443,7 +448,7 @@ class Editor20(Editor19):
                 x,y=self.screen(q);c.create_line(*self.screen(end),x,y,fill='#ba4688',dash=(4,3),tags='connection_edit20_4');c.create_rectangle(x-5,y-5,x+5,y+5,fill='#ffdbef',outline='#a83b79',width=2,tags='connection_edit20_4')
         c.tag_raise('connection_edit20_4')
     def pointer(self,e):
-        if self.mode in ('TRUNCATE20_18','APRON_RECT20_18','APRON_TRAP20_18','APRON_CARGO23','APRON_RUNUP23'):return __import__('workspace20_18').preview(self,e)
+        if self.mode in ('TRUNCATE20_18','APRON_RECT20_18','APRON_TRAP20_18','APRON_CARGO23','APRON_RUNUP23','APRON_DEICE_POLY'):return __import__('workspace20_18').preview(self,e)
         __import__('view_overlay20_9').status(self,e)
         if not self._pan11:self._last_event20=(self.world(e.x,e.y),getattr(e,'state',0))
         result=super().pointer(e)
@@ -526,7 +531,7 @@ class Editor20(Editor19):
                   for distance,station,q in [g.project(item['points'],p)] if distance<=5/max(.001,self.zoom)]
             if hits:return min(hits,key=lambda hit:hit[0])
         picked=super().pick(p,paths_only)
-        if paths_only or self.mode not in ('SELECT','NODES'):return picked
+        if paths_only or self.mode!='NODES':return picked
         obj=(self.scene.assets.get(picked[1]) or self.auto_assets.get(picked[1])) if picked else None
         if obj and (obj['kind']=='STAND' or self.scene.assets.get(obj.get('owner'),{}).get('kind')=='STAND'):
             hit=model.snap(self.scene,p,2/max(.001,self.zoom))
@@ -569,7 +574,7 @@ class Editor20(Editor19):
 
     def click(self,e):
         if self.mode=='TRUNCATE20_18':return __import__('workspace20_18').cut(self,e,self.__dict__.get('_truncate_right21_2',False))
-        if self.mode in ('APRON_RECT20_18','APRON_TRAP20_18','APRON_CARGO23','APRON_RUNUP23'):return __import__('workspace20_18').apron_click(self,e)
+        if self.mode in ('APRON_RECT20_18','APRON_TRAP20_18','APRON_CARGO23','APRON_RUNUP23','APRON_DEICE_POLY'):return __import__('workspace20_18').apron_click(self,e)
         if self._space11:return super().click(e)
         if self.mode=='NODES' and not self._color17:
             for x,y,aid,index in reversed(getattr(self,'_remote_exit_handles',())):
@@ -755,6 +760,18 @@ class Editor20(Editor19):
     def pan_move(self,e):
         __import__('view_overlay20_9').status(self,e)
         result=super().pan_move(e);__import__('view_overlay20_9').status(self);return result
+    def remove_runway_instruction_markings20(self):
+        from automatic_markings import remove_runway_instruction_markings
+        from qt_core21 import W
+        title=tr('去除强制性指令标识和增强型中线')
+        buttons=W.QMessageBox.StandardButton
+        if W.QMessageBox.question(self.q,title,tr('去除手绘标识并停止自动生成？可用撤销恢复。'),
+                                  buttons.Yes|buttons.No,buttons.No)!=buttons.Yes:
+            return
+        remove_runway_instruction_markings(self.scene)
+        self.refresh()
+        self.status.set(tr('已去除强制性指令标识和增强型中线。'))
+
     def standardize_mandatory20(self):
         from automatic_markings import standardize_runway_mandatory
         with self.processing('正在按道面净宽统一跑道编号标识'):

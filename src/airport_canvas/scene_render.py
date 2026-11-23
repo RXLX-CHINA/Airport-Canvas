@@ -3,7 +3,7 @@ import html
 import math
 from pathlib import Path
 import scene_geometry as g
-from pavement_geometry import corridor,exclude_runways,crossings,fillets,turn_guides,offset,subtract_convex,shoulder_width
+from pavement_geometry import corridor_parts,exclude_runways,crossings,fillets,turn_guides,offset,subtract_convex,shoulder_width
 from marking_catalog import primitives,CATALOG,hatch_segments
 from scene_rules import holding_plan
 from common import check_size
@@ -74,6 +74,12 @@ def _build_surface_geometry(scene):
             parts=[x for part in parts for x in subtract_convex(part,apron)]
         return parts
     from pavement10 import clip_caps,runway_cap_planes,corridor_caps,runway_terminal
+    def clipped_corridors(points,width,planes,kind):
+        for outline in corridor_parts(points,width):
+            poly=clip_caps(outline,planes)
+            if poly:
+                yield from ([poly] if kind=='RUNWAY' else taxi_parts(poly))
+
     caps=runway_cap_planes(scene)
     from pavement_geometry import rounded_terminal_joins,terminal_band
     junctions=crossings(scene)
@@ -101,13 +107,10 @@ def _build_surface_geometry(scene):
         planes=corridor_caps(a['points'],caps.get(aid,()))
         points=g.subpath(a['points'],*trims[aid]) if aid in trims else a['points']
         if shoulder:
-            poly=corridor(points,total)
-            poly=clip_caps(poly,planes)
-            pieces=([poly] if kind=='RUNWAY' else taxi_parts(poly)) if poly else []
-            shoulders += [dict(oid=aid,points=x,kind=kind) for x in pieces]
-        poly=clip_caps(corridor(points,p['width']),planes)
-        pieces=[poly] if kind=='RUNWAY' else taxi_parts(poly) if poly else []
-        pavement += [dict(oid=aid,points=x,kind=kind) for x in pieces]
+            shoulders.extend(dict(oid=aid,points=x,kind=kind)
+                             for x in clipped_corridors(points,total,planes,kind))
+        pavement.extend(dict(oid=aid,points=x,kind=kind)
+                        for x in clipped_corridors(points,p['width'],planes,kind))
     for mid,m in scene.movements.items():
         if not m.get('pavement_visible',True):continue
         connector_kind=m.get('taxiway_kind39','CONNECTOR')
@@ -117,15 +120,27 @@ def _build_surface_geometry(scene):
         if g.length(pts)<.1:continue
         shoulder=shoulder_width(connector_kind,m,max(shoulder_width(a['kind'],a['props']),shoulder_width(b['kind'],b['props'])))
         planes=corridor_caps(pts,caps.get(mid,()))
+        shoulder_planes=list(planes)
+        from pavement_geometry import area
+        for port,approach in ((a,pts[-1]),(b,pts[0])):
+            if port['kind']!='RUNWAY':continue
+            start,finish=port['points']
+            # Keep the connector shoulder on the approach side of its runway.
+            if abs(area([start,finish,approach]))<1e-7:continue
+            if area([start,finish,approach])<0:start,finish=finish,start
+            shoulder_planes.append((start,finish))
         if shoulder:
-            shoulders += [dict(oid=mid,points=x,kind=connector_kind) for x in taxi_parts(clip_caps(corridor(pts,m['width']+2*shoulder),planes))]
-        pavement += [dict(oid=mid,points=x,kind=connector_kind) for x in taxi_parts(clip_caps(corridor(pts,m['width']),planes))]
+            shoulders += [dict(oid=mid,points=x,kind=connector_kind) for x in clipped_corridors(pts,m['width']+2*shoulder,shoulder_planes,connector_kind)]
+        pavement += [dict(oid=mid,points=x,kind=connector_kind) for x in clipped_corridors(pts,m['width'],planes,connector_kind)]
         from junction_routes import branches,fork_polygon
         for branch in branches(scene,m):
             if not m.get('reverse_join_pavement',True):continue
+            if m.get('geometry')=='RAPID':
+                from smart_routes import reverse_surface
+                branch=reverse_surface(scene,m,branch)
             oid=branch['oid'];bp=branch['points']
-            if shoulder:shoulders += [dict(oid=oid,points=x,kind=connector_kind) for x in taxi_parts(corridor(bp,m['width']+2*shoulder))]
-            pavement += [dict(oid=oid,points=x,kind=connector_kind) for x in taxi_parts(corridor(bp,m['width']))]
+            if shoulder:shoulders += [dict(oid=oid,points=x,kind=connector_kind) for x in clipped_corridors(bp,m['width']+2*shoulder,shoulder_planes,connector_kind)]
+            pavement += [dict(oid=oid,points=x,kind=connector_kind) for x in clipped_corridors(bp,m['width'],(),connector_kind)]
             # The area enclosed by two forks and the receiving taxiway is bearing pavement.
             fill=fork_polygon(scene,m,branch)
             if len(fill)>2:
@@ -224,7 +239,7 @@ def runway_paint(a):
                 mark('TDZ_CODED',pos(station),t,width=sep,bars=(3,3,2,2,1,1)[i])
     return out
 
-def display_list(scene,labels=False,facilities=True,protection=True,board_enlarged=None,generated=None):
+def display_list(scene,labels=False,facilities=True,protection=True,board_enlarged=None,generated=None,chart_guides=False):
     from automatic_markings import generated_markings,holding_locations
     out=[];surfaces=surface_geometry(scene);runways=surfaces['runways'];junctions=crossings(scene)
     curves={mid:scene.movement_path(mid) for mid in scene.movements}
@@ -358,7 +373,11 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
     from geometry11 import LineString,Point
     from guidance20 import junction_cuts
     routes=__import__('pavement_geometry').route_objects(scene)
-    straight_cuts=junction_cuts(scene,junctions,routes)
+    from lighting_closures import pavement_closures
+    closed_routes=pavement_closures(scene)
+    junction_guides={j['id']:turn_guides(scene,j) for j in junctions
+                     if chart_guides or not any(aid in closed_routes for aid in j['assets'])}
+    straight_cuts=junction_cuts(scene,junctions,routes,junction_guides)
     indexes={oid:LineString(routes[oid]['points']) for oid in straight_cuts}
     def junction_straight_hidden(oid,q):
         if oid not in straight_cuts:return False
@@ -379,7 +398,7 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
     for aid,a in scene.assets.items():
         kind=a['kind'];p=a['props'];pts=a['points']
         if kind in ('RUNWAY','APRON','PROTECTION','EQUIPMENT','CLOSED_AREA','MARKING','ROAD'):continue
-        if p.get('closed') and p.get('closure_kind')=='PERMANENT':continue
+        if not chart_guides and p.get('closed') and p.get('closure_kind')=='PERMANENT':continue
         if kind=='STAND':
             continue
         def straight_hidden(q):
@@ -387,6 +406,7 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
         if p.get('center_visible',True):
             first=len(out)
             clipped(aid,__import__('rules13').asset_guide(scene,a),lambda q:holding_gap(q) or straight_hidden(q),COLORS['white'] if kind=='ROAD' else COLORS['marking'],.15,[1,1] if kind=='ROAD' else None)
+            for item in out[first:]:item['chart_taxi_owners']=(aid,)
             if p.get('rapid_exit') or p.get('rapid_drawn_axis56'):
                 for item in out[first:]:item['rapid_runway_guide']=True
         if False:  # Exact union boundaries are emitted below.
@@ -408,8 +428,6 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
         arc=patch['arc'];middle=arc[len(arc)//2]
         test=offset(arc,.1)[len(arc)//2];sign=1 if g.inside(test,patch['points']) else -1
         for inset in (.075,.375):clipped(patch['oid'],offset(arc,sign*inset),lambda q:in_runway(q,.2) or holding_gap(q) or other_pavement(q,patch['oid']))
-    from lighting_closures import pavement_closures
-    closed_routes = pavement_closures(scene)
     for mid,m in scene.movements.items():
         if not m.get('guide_visible',True):continue
         pts=curves[mid]
@@ -425,6 +443,8 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
                 painted=extend_runway_guidance(scene,painted,a,index,direction_hint=direction,rapid=rapid)
         first=len(out)
         clipped(mid,painted,lambda q:holding_gap(q) or junction_straight_hidden(mid,q),COLORS['white'] if m['role']=='PUSHBACK' else COLORS['marking'],.15,[1,1] if m['role']=='PUSHBACK' else None)
+        if m['role']!='PUSHBACK':
+            for item in out[first:]:item['chart_taxi_owners']=(mid,)
         if m.get('geometry')=='RAPID':
             for item in out[first:]:item['rapid_runway_guide']=True
         if False:  # Shared boundaries and reverse guides are handled independently. 
@@ -437,17 +457,20 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
                         and mid not in closed_routes and port['asset'] not in closed_routes):
                     clipped(branch['oid'],branch['points'],holding_gap)
                 if m.get('reverse_join_pavement',True):
+                    if m.get('geometry')=='RAPID':
+                        from smart_routes import reverse_surface
+                        branch=reverse_surface(scene,m,branch)
                     for side in (-1,1):
                         for inset in (.075,.375):clipped(branch['oid'],offset(branch['points'],side*(m['width']/2-inset)),lambda q,outside:in_runway(q,.2) or other_pavement(outside,branch['oid']) or holding_gap(q),probe_offset=side*(inset+.25))
     for j in junctions:
-        if any(aid in closed_routes for aid in j['assets']):
-            continue
-        for guide in turn_guides(scene,j):
+        for guide in junction_guides.get(j['id'],()):
             points=junction_guide_path(scene,j,guide)
             first=len(out)
             clipped(j['id'],points,holding_gap)
+            for item in out[first:]:item['chart_taxi_owners']=tuple(j['assets'])
             if any(scene.assets.get(aid,{}).get('kind')=='RUNWAY' for aid in j['assets']):
                 for item in out[first:]:item['runway_junction_guide32']=True
+    if chart_guides:return [item for item in out if item.get('chart_taxi_owners')]
     for aid,a in generated.items():
         if not facilities and a['props']['mark_type'] in ('HOLD_A','HOLD_B','TWY_ENHANCED','MANDATORY'):continue
         if a['props']['mark_type']=='TWY_ENHANCED':
@@ -503,6 +526,12 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
         shoulder_ink=shoulder_stripes(scene,surfaces)
         taxi_ink=taxi_edges(scene,surfaces,holds)
         runway_ink=runway_edges(scene,surfaces)
+    for aid,asset in scene.assets.items():
+        props=asset['props']
+        if asset['kind']=='APRON' and props.get('destination_code23')=='RUNUP':
+            points=asset['points']
+            out.append(dict(type='line',oid=aid,points=points+[points[0]],
+                            stroke=COLORS['marking'],width=.25,dash=[3,2]))
     out.extend(shoulder_ink)
     from stand_overlap9 import paint_boundaries,clip_merged_stand_lines
     from stand13 import merge_work_zone_outlines,clip_work_zones_at_stands
@@ -537,6 +566,10 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
     items=top_runway_paint(scene,rendered,generated)
     from papi21 import plan_items
     items.extend(plan_items(scene))
+    from stand13 import ga_labels
+    for asset in scene.assets.values():
+        if asset['kind']=='STAND' and asset['props'].get('ga_stand'):
+            items.extend(ga_labels(asset))
     styles=scene.data['meta'].get('object_display',{})
     items=ordered_draw_items(scene,items,generated)
     if not styles:return items

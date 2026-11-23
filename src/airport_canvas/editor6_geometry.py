@@ -5,7 +5,7 @@ import scene_geometry as g
 
 def stop_rows(asset):
     p=asset['props']
-    return p.get('stops') if 'stops' in p else [dict(id='default',name='1',aircraft=p.get('aircraft_codes','A320'),offset=0.,lateral=0.,rotation=0.,shape='T' if p.get('guidance')=='GUIDED' else 'UNGUIDED',length=p.get('stop_length',6 if p.get('guidance')=='UNGUIDED' else 2),width=p.get('stop_width',.15),visible=True)]
+    return p.get('stops') if 'stops' in p else [dict(id='default',name='1',aircraft=p.get('aircraft_codes','C172' if p.get('ga_stand') else 'A320'),offset=0.,lateral=0.,rotation=0.,shape='T' if p.get('guidance')=='GUIDED' else 'UNGUIDED',length=p.get('stop_length',6 if p.get('guidance')=='UNGUIDED' else 2),width=p.get('stop_width',.15),visible=True)]
 
 def add_stop(scene,aid):
     import copy

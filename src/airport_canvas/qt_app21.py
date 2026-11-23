@@ -1,7 +1,7 @@
 """Airport Canvas 21: Qt shell with unchanged airport editing controllers."""
 import sys
 from contextlib import contextmanager
-from interface_language import tr
+from interface_language import APPROACH_LEVELS, tr
 from pathlib import Path
 from qt_core21 import application
 from qt_theme21 import apply
@@ -42,7 +42,6 @@ class AirportApp(Editor20):
         edit_menu=next((act.menu() for act in self.q.menuBar().actions()
                         if act.text().replace('&','') in ('编辑',tr('编辑'))),None)
         if edit_menu:
-            edit_menu.addAction('PAPI…',self.configure_papi)
             from stand_row47 import StandRow
             edit_menu.addAction('批量绘制机位…',lambda:StandRow(self).start())
             from stand_names65 import show_stand_names
@@ -366,7 +365,7 @@ class AirportApp(Editor20):
                  'deice_crossfall_mode':['SINGLE','SYMMETRIC'],
                  'flow':['BOTH','FORWARD','REVERSE'],'closure_kind':['TEMPORARY','PERMANENT'],
                  'code_letter':list('ABCDEF'),'code_number':['1','2','3','4'],
-                 'level_a':['v','0','1','2','3'],'level_b':['v','0','1','2','3'],
+                 'level_a':APPROACH_LEVELS,'level_b':APPROACH_LEVELS,
                  'enhanced_direction':['START','END'],'guidance':['GUIDED','UNGUIDED']}
         for field in ('work_zone','work_zone_left','work_zone_right','work_zone_bridge_side'):
             choices[field]=list(WORK_ZONES59)+( [NO_WORK_ZONE] if field=='work_zone_bridge_side' else [])
@@ -384,8 +383,13 @@ class AirportApp(Editor20):
                 control.setChecked(value)
             elif field in choices:
                 control=QComboBox()
-                control.addItems(choices[field])
-                control.setCurrentText(str(value))
+                options=choices[field]
+                if isinstance(options,dict):
+                    for code,caption in options.items():control.addItem(tr(caption),code)
+                    control.setCurrentIndex(max(0,control.findData(str(value))))
+                else:
+                    control.addItems(options)
+                    control.setCurrentText(str(value))
             else:
                 control=QLineEdit(str(value))
             form.addRow(field,control)
@@ -399,7 +403,7 @@ class AirportApp(Editor20):
                 if isinstance(control,QCheckBox):
                     parsed[field]=control.isChecked()
                 elif isinstance(control,QComboBox):
-                    parsed[field]=control.currentText()
+                    parsed[field]=control.currentData() or control.currentText()
                 else:
                     parsed[field]=type(values[field])(control.text().strip())
             self.drawing_presets[key]=parsed
@@ -643,7 +647,7 @@ class AirportApp(Editor20):
         self.selected_ids=set()
         self.select(None)
         self._stand_overlap_scene=self.scene
-        self._stand_overlap_pair=None
+        self._stand_overlap_pairs=set()
         self.redraw()
         self.update_inspector()
         self.status.set('点击高亮的机位相交区，在右侧选择处理方式。按 Esc 退出。')
@@ -664,7 +668,7 @@ class AirportApp(Editor20):
         self.canvas.delete('stand_overlap_regions')
         if not self.stand_overlap_active():return
         for key,shape in self.stand_overlap_regions().items():
-            selected=key==self._stand_overlap_pair
+            selected=key in self._stand_overlap_pairs
             color='#f4a832' if selected else '#28bddb'
             for area in polygons(shape):
                 coords=[v for q in area.exterior.coords for v in self.screen(q)]
@@ -672,31 +676,36 @@ class AirportApp(Editor20):
                                            outline=color,width=2,tags='stand_overlap_regions')
         self.canvas.tag_raise('stand_overlap_regions')
 
-    def set_stand_overlap_style(self,pair,merged):
-        if not self.stand_overlap_active() or pair not in self.stand_overlap_regions():return
+    def set_stand_overlap_style(self,selected,merged):
+        if not self.stand_overlap_active():return
+        selected=selected.intersection(self.stand_overlap_regions())
+        if not selected:return
         with self.scene.transaction('编辑机位相交区域'):
             pairs=self.scene.data['meta'].setdefault('merged_stand_overlaps',{})
-            if merged:pairs[pair]=True
-            else:pairs.pop(pair,None)
+            for pair in selected:
+                if merged:pairs[pair]=True
+                else:pairs.pop(pair,None)
         self.refresh()
 
     def stand_overlap_inspector(self):
         from qt_compat import ttk
         from property_rows import next_row
         panel=self.section('机位相交区域')
-        pair=self._stand_overlap_pair
-        if pair not in self.stand_overlap_regions():
-            message='在画布上选择一个高亮区域。' if self.stand_overlap_regions() else '当前没有相交的机位安全线区域。'
-            ttk.Label(panel,text=message,wraplength=235).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
+        regions=self.stand_overlap_regions()
+        selected=self._stand_overlap_pairs.intersection(regions)
+        if not selected:
+            message='点击区域选中，按住 Ctrl 可多选。' if regions else '当前没有相交的机位安全线区域。'
+            ttk.Label(panel,text=tr(message),wraplength=235).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
             return
-        names=' / '.join(self.scene.assets[aid]['name'] for aid in pair.split('|'))
-        ttk.Label(panel,text=names).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
-        import qt_compat as tk
-        selection=tk.StringVar(value='merge' if pair in self.scene.data['meta'].get('merged_stand_overlaps',{}) else 'hatch')
-        for value,label in (('hatch','斜线阴影'),('merge','合并机位')):
-            ttk.Radiobutton(panel,text=label,value=value,variable=selection,
-                            command=lambda mode=value:self.set_stand_overlap_style(pair,mode=='merge')).grid(
-                                row=next_row(panel),column=0,columnspan=2,sticky='w')
+        if len(selected)==1:
+            caption=' / '.join(self.scene.assets[aid]['name'] for aid in next(iter(selected)).split('|'))
+        else:
+            caption=tr('已选区域数')+'  '+str(len(selected))
+        ttk.Label(panel,text=caption).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
+        for merged,label in ((False,'应用斜线阴影'),(True,'应用机位合并')):
+            ttk.Button(panel,text=tr(label),
+                       command=lambda mode=merged:self.set_stand_overlap_style(selected,mode)).grid(
+                           row=next_row(panel),column=0,columnspan=2,sticky='ew')
 
     def update_inspector(self):
         super().update_inspector()
@@ -710,6 +719,19 @@ class AirportApp(Editor20):
                        command=lambda:self.batch_parameters(ids,self.selection)).grid(
                            row=next_row(panel),column=0,columnspan=2,sticky='ew')
             self.ensure_book15().tidy()
+        if len(ids)==1 and self.scene.assets.get(self.selection,{}).get('kind')=='RUNWAY':
+            props=self.scene.assets[self.selection]['props']
+            elevation=self.section('跑道端海拔')
+            for end in ('a','b'):
+                self.property_field(elevation,'elevation_'+end,
+                                    tr('跑道端海拔 (m，可空)')+' '+end.upper(),
+                                    props.get('elevation_'+end),'float')
+            self.property_field(elevation,'elevation_unit',tr('海拔标注单位'),
+                                props.get('elevation_unit','m'),'text',['m','ft'])
+            from qt_compat import ttk
+            panel=self.section('PAPI')
+            ttk.Button(panel,text=tr('PAPI 灯设置…'),command=self.configure_papi).grid(
+                row=0,column=0,columnspan=2,sticky='ew')
         oid=self.__dict__.get('_bitmap_selection46')
         if not oid:return
         from bitmap_layers46 import inspector,layers
@@ -739,7 +761,11 @@ class AirportApp(Editor20):
             from geometry11 import Point
             point=Point(self.world(event.x,event.y))
             hits=[(shape.area,key) for key,shape in self.stand_overlap_regions().items() if shape.covers(point)]
-            self._stand_overlap_pair=min(hits)[1] if hits else None
+            pair=min(hits)[1] if hits else None
+            if getattr(event,'state',0)&0x0004:
+                if pair:self._stand_overlap_pairs.symmetric_difference_update({pair})
+            else:
+                self._stand_overlap_pairs={pair} if pair else set()
             self.update_inspector()
             self.draw_stand_overlap_regions()
             return 'break'
@@ -821,7 +847,7 @@ class AirportApp(Editor20):
     def motion(self,event):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active and not (self._pan11 or self._space11):
-            return 'break'
+            return chart.drag_symbol(event)
         lighting = self.__dict__.get('lighting_view')
         if lighting and lighting.active and not self._pan11:
             return 'break'
@@ -857,7 +883,7 @@ class AirportApp(Editor20):
     def release(self,event):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active and not (self._pan11 or self._space11):
-            return 'break'
+            return chart.release_symbol(event)
         lighting = self.__dict__.get('lighting_view')
         if lighting and lighting.active and not self._pan11:
             return 'break'
@@ -938,6 +964,7 @@ class AirportApp(Editor20):
     def cancel_action(self,event=None):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active:
+            chart.cancel_symbol_drag()
             if chart.tool:chart.choose(None)
             else:
                 chart.selected=None
@@ -1099,7 +1126,7 @@ class AirportApp(Editor20):
             c.create_text(x,y+26,text=caption,fill=color,font=('Microsoft YaHei',8),tags='north23')
 
     def update_title(self):
-        super().update_title();self.q.setWindowTitle(self.q.windowTitle().replace('20.18','v1.0'))
+        super().update_title();self.q.setWindowTitle(self.q.windowTitle().replace('20.18','v1.0.1'))
     def demo10(self):
         previous=self.scene
         super().open(Path(__file__).with_name('ZSQD.ACP'))
@@ -1111,7 +1138,7 @@ class AirportApp(Editor20):
         from qt_core21 import W
         runway=self.scene.assets.get(self.selection,{})
         if runway.get('kind')!='RUNWAY':
-            self.status.set(tr('请先选择跑道'))
+            W.QMessageBox.information(self.q, tr('PAPI 灯设置…'), tr('请先选择跑道'))
             return
         dialog=W.QDialog(self.q)
         dialog.setWindowTitle('PAPI')

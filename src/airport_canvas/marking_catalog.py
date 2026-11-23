@@ -130,6 +130,7 @@ CATALOG['ROAD_STOP']['defaults']['red_background']=True
 CATALOG['ROAD_STOP']['extra_fields']=[('red_background','停字红色矩形底色','bool',True)]
 EDITABLE_FIELDS['max_span']={'text_height','background'}
 EDITABLE_FIELDS['helipad']={'width','line_width','text_height'}
+register('HELI_SAFETY','直升机位安全线','直升机位安全线','机坪安全与设备','PATH','heli_safety',color='#2580cf')
 register('HELIPAD','直升机坪','直升机坪','项目绘图','POINT','helipad',color=WHITE)
 CATALOG['HELIPAD']['defaults'].update(width=24.,line_width=.3,text_height=4.)
 
@@ -175,6 +176,16 @@ def primitives(asset):
         stroke([[x,y],[x-l+10,y]],c,.3,local=True);stroke([[x-12,y-w/2],[x,y],[x-12,y+w/2]],c,1,local=True)
     if shape in ('line','dash','safety','road_edge','pushback'):
         c=WHITE if p['mark_type']=='THRESHOLD_BAR' else RED if shape=='safety' else WHITE if shape in ('road_edge','pushback') else color
+        if shape=='safety' and p.get('helicopter_safety'):
+            stroke(pts+[pts[0]],WHITE,.55)
+            stroke(pts+[pts[0]],'#2580cf',.28)
+            return out
+        if shape=='safety' and p.get('ga_frame_color'):
+            for color,width in ((p['ga_outline_color'],.55),(p['ga_frame_color'],.25)):
+                for index,(a,b) in enumerate(zip(pts,pts[1:]+pts[:1])):
+                    stroke([a,b],color,width)
+                    out[-1]['ga_longitudinal_edge']=index in (1,3)
+            return out
         if shape=='safety' and p.get('open_stand_nose58') and len(pts)==8:
             stroke(pts[:4],c,lw)
             stroke(pts[4:],c,lw)
@@ -184,9 +195,13 @@ def primitives(asset):
     elif shape=='road_arrow':
         from roads11 import arrow as road_arrow
         out.append(road_arrow(oid,origin,u,width=width,length=p.get('arrow_length',4.)))
+    elif shape=='heli_safety':
+        stroke(pts,'#2580cf',lw)
     elif shape=='helipad':
-        box(-width/2,-width/2,width/2,width/2,'#737b83',WHITE,lw)
-        text('H',c=WHITE)
+        circle(0,0,width/2,c=YELLOW,w=lw)
+        text('H',c=YELLOW,h=min(height,width*.35))
+        if p.get('number'):
+            text(p['number'],x=-width*.65,c=YELLOW,h=min(height,width*.19))
     elif shape=='rwy_center':
         from runway import centerline_geometry
         count,segment,gap=centerline_geometry(g.length(pts))

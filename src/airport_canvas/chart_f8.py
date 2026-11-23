@@ -26,11 +26,19 @@ TYPES = {
     'MARKING': ('其他标线', '#262626', '#fcfcfc'),
     'ARP': ('机场基准点', '#ffffff', None),
     'WIND': ('风向标', '#262626', '#ffffff'),
+    'TOWER': ('控制塔','#262626',None),
+    'VOR': ('VOR','#262626',None),
+    'NDB': ('NDB','#262626',None),
+    'DME': ('DME','#262626',None),
+    'AIM': ('瞄准点','#262626',None),
+    'DISPLACED': ('内移入口','#262626','#ffffff'),
+    'ELEV': ('跑道端海拔','#262626',None),
     'PAPI': ('PAPI','#262626',None),
     'HS': ('热点', '#e6780a', '#ffffff'),
 }
 DEFAULT_VISIBLE = set(list(TYPES)[:9])
-SYMBOLS = ('ARP', 'WIND', 'HS')
+SYMBOLS = ('ARP','WIND','HS','TOWER','VOR','NDB','DME')
+NAV_SYMBOLS = ('TOWER','VOR','NDB','DME')
 HOTSPOTS = {'rounded_polygon':'自动圆角多边形','polygon':'普通多边形','rectangle':'矩形','rounded_rectangle':'圆角矩形','circle':'圆形'}
 UNITS = {'m':1, 'ft':1/.3048, 'km':.001}
 FIELDS = (
@@ -95,7 +103,7 @@ def shoulder_kind(piece):
 
 
 def is_visible(config,kind):
-    fallback=config.get('visible',{}).get('SHOULDER',False) if kind.endswith('_SHOULDER') else kind in DEFAULT_VISIBLE or kind in SYMBOLS or kind=='PAPI'
+    fallback=config.get('visible',{}).get('SHOULDER',False) if kind.endswith('_SHOULDER') else kind in DEFAULT_VISIBLE or kind in SYMBOLS or kind in ('PAPI','AIM','DISPLACED','ELEV')
     return config.get('visible',{}).get(kind,fallback)
 
 
@@ -219,13 +227,48 @@ def box_edge(center,target,half_width,half_height):
     return center[0]+dx*ratio,center[1]+dy*ratio
 
 
-def chart_items(scene, regular=()):
+CLOSURE_RED = '#bd252c'
+CLOSURE_LABEL = '关闭道面'
+CLOSURE_NOTES = {
+    'red': '红色中线表示关闭道面。',
+    'cross': '与道面同色的一串 × 表示关闭道面。',
+}
+
+
+def closure_style(config):
+    return 'cross' if config.get('closure',{}).get('style')=='cross' else 'red'
+
+
+def closure_marks(points, span):
+    length=g.length(points)
+    count=max(1,math.ceil(length/max(15,span*4)))
+    size=min(span*.35,length/(4*count))
+    for i in range(count):
+        (x,y),(ux,uy)=g.at(points,length*(i+.5)/count)
+        for sign in (-1,1):
+            dx,dy=(ux-sign*uy)*size,(uy+sign*ux)*size
+            yield [(x-dx,y-dy),(x+dx,y+dy)]
+
+
+def chart_items(scene, regular=None):
     from model20 import axes
     from project10 import stopway_axes
     from scene_render import surface_geometry
     from stand_profiles import lead_design, safety_profile
 
+    from marking_standards import closure_routes
+    if regular is None:
+        from scene_render import display_list
+        regular=display_list(scene)
     config=settings(scene)
+    closed_assets,closed=closure_routes(scene)
+    use_cross=closure_style(config)=='cross'
+    guides=regular
+    if closed or not regular:
+        from scene_render import display_list
+        guides=display_list(scene,chart_guides=True)
+    from pavement_geometry import crossings
+    junction_owners={j['id']:j['assets'] for j in crossings(scene)} if closed and use_cross else {}
     axes_map=axes(scene)
     assets={**scene.assets,**axes_map}
     hidden=scene.data['meta'].get('object_display',{})
@@ -259,6 +302,9 @@ def chart_items(scene, regular=()):
         for piece in surfaces[band]:
             oid=piece['oid']
             owner=oid if oid in assets else oid.split(':')[0]
+            if use_cross and (owner in closed or any(aid in closed for aid in
+                              junction_owners.get(oid.removesuffix(':core'),()))):
+                continue
             asset=assets.get(owner)
             kind=shoulder_kind(piece) if band=='shoulders' else category(asset) if asset else category({'kind':piece['kind'],'props':{}})
             if show(kind,owner):
@@ -269,7 +315,7 @@ def chart_items(scene, regular=()):
         kind=category(asset)
         props=asset['props']
         points=asset['points']
-        if kind=='RUNWAY' and show('STOPWAY',aid):
+        if kind=='RUNWAY' and show('STOPWAY',aid) and not (use_cross and aid in closed):
             for end,outside,origin,_ in stopway_axes(asset):
                 oid=f'{aid}:stopway:{end}'
                 add('STOPWAY',polygon(oid,g.rectangle([outside,origin],props['width']),*colors(config,'STOPWAY',oid)))
@@ -287,8 +333,10 @@ def chart_items(scene, regular=()):
                 if len(envelope)>=3:add(kind,polygon(aid,envelope,None,fill))
             for guide in lead_design(asset,scene)['paths']:
                 add(kind,line(aid,guide['points'],stroke,dash=[2,1.5]))
-        if kind=='TAXIWAY' and aid in axes_map:
-            add(kind,line(aid,points,'#262626' if stroke=='#cccccc' else stroke,dash=[3,2]))
+            if props.get('remote_stand'):
+                from stand15 import remote_exit_lines
+                for path in remote_exit_lines(asset,scene):
+                    add(kind,line(aid,path,stroke,dash=[2,1.5]))
         if kind=='RUNWAY':
             length=g.length(points)
             midpoint,u=g.at(points,length/2)
@@ -321,6 +369,48 @@ def chart_items(scene, regular=()):
                            points=[(point[0],point[1]+stand_size*.75)])
             if kind=='TERMINAL':row['chart_terminal']=True
             add(kind,row)
+    for item in guides:
+        owners=item.get('chart_taxi_owners',())
+        taxi_owners=[oid for oid in owners if oid in assets and category(assets[oid])=='TAXIWAY']
+        if (item['type']!='line' or not taxi_owners or item.get('black_underlay')
+                or not all(show('TAXIWAY',oid) for oid in taxi_owners)):
+            continue
+        closed_owner=next((oid for oid in owners if oid in closed),None)
+        if closed_owner is None:
+            add('TAXIWAY',line(taxi_owners[0],item['points'],'#000000',width=.45))
+        elif use_cross:
+            asset=assets[closed_owner]
+            span=asset['props'].get('width',15)
+            stroke,fill=colors(config,category(asset),closed_owner)
+            for mark in closure_marks(item['points'],span):
+                add('CLOSURE',line(taxi_owners[0],mark,fill or stroke,width=1.2))
+        else:
+            add('CLOSURE',line(taxi_owners[0],item['points'],CLOSURE_RED,width=.45))
+    for oid in sorted(closed):
+        asset=closed_assets.get(oid)
+        if not asset:continue
+        kind=category(asset)
+        if kind not in ('RUNWAY','APRON','ROAD') or not show(kind,oid):continue
+        points=asset['points']
+        span=asset['props'].get('width',15)
+        if kind=='APRON':
+            from shapely.geometry import LineString
+            from geometry11 import lines
+            area=shape_polygon(points)
+            x0,y0,x1,y1=area.bounds
+            x,y=area.representative_point().coords[0]
+            axis=[(x0,y),(x1,y)] if x1-x0>=y1-y0 else [(x,y0),(x,y1)]
+            paths=[list(part.coords) for part in lines(area.intersection(LineString(axis)))]
+            span=min(x1-x0,y1-y0)
+        else:
+            paths=[points]
+        color=(colors(config,kind,oid)[1] or colors(config,kind,oid)[0]) if use_cross else CLOSURE_RED
+        for path in paths:
+            if g.length(path)<=0:continue
+            marks=closure_marks(path,span) if use_cross else [path]
+            for mark in marks:
+                rows.append(line(oid,mark,color,width=1.2))
+                kinds.add('CLOSURE')
     if show('MARKING',''):
         for item in regular:
             if item.get('oid') in scene.assets and scene.assets[item['oid']]['kind']=='MARKING' and show('MARKING',item['oid']):
@@ -329,39 +419,160 @@ def chart_items(scene, regular=()):
     for runway,end,lamps,_ in papi_rows(scene):
         if show('PAPI',runway['id']):
             ink,_=colors(config,'PAPI',runway['id'])
-            add('PAPI',label(runway['id'],lamps[1],'Ⓟ',13,ink))
+            center=tuple((a+b)/2 for a,b in zip(lamps[0],lamps[-1]))
+            add('PAPI',dict(label(runway['id'],center,'',13,ink),chart_symbol='PAPI',symbol_fill=None))
     terminal_labels=[row for row in rows if row['type']=='text' and row.get('chart_terminal')]
     for oid,item in config.get('symbols',{}).items():
         kind=item['kind']
-        if show(kind,oid):
+        if kind not in NAV_SYMBOLS and show(kind,oid):
             point=symbol_point(scene,item)
             stroke,_=colors(config,kind,oid)
             fill=colors(config,kind,oid)[1]
+            runway=arp_runway(scene,point,item.get('runway')) if kind=='ARP' else None
+            if kind=='ARP' and runway is None:stroke='#000000'
             if kind=='HS' and item.get('vertices'):
                 path=hotspot_path(item.get('shape','polygon'),item['vertices'])
                 add(kind,dict(line(oid,path,stroke),screen_line=True,cosmetic_pen=True,chart_kind=kind))
                 point=max(path,key=lambda p:p[1])
             else:
-                add(kind,dict(label(oid,point,'',19,stroke),chart_symbol=kind,symbol_fill=fill))
+                symbol=dict(label(oid,point,'',19,stroke),chart_symbol=kind,symbol_fill=fill)
+                if runway is not None:symbol['chart_symbol_max']=arp_diameter(runway,point)
+                add(kind,symbol)
             row=label(oid,point,item.get('label',kind),10,'#000000' if kind=='ARP' else stroke,dy=-16)
-            if kind=='ARP':
-                runway=arp_runway(scene,point,item.get('runway'))
-                if runway:
-                    _,station,axis_point=g.project(runway['points'],point)
-                    _,u=g.at(runway['points'],station)
-                    nx,ny=runway_normal(u)
-                    side_offset=(point[0]-axis_point[0])*nx+(point[1]-axis_point[1])*ny
-                    edge=max(0,runway['props']['width']/2+side_offset)
-                    row=runway_side_label(oid,point,item.get('label','ARP'),u,(-nx,-ny),edge,paved(),clearance)
-                    for symbol in reversed(rows):
-                        if symbol['oid']==oid and symbol.get('chart_symbol')=='ARP':
-                            symbol['chart_symbol_max']=arp_diameter(runway,point)
-                            break
+            if runway is not None:
+                _,station,axis_point=g.project(runway['points'],point)
+                _,u=g.at(runway['points'],station)
+                nx,ny=runway_normal(u)
+                side_offset=(point[0]-axis_point[0])*nx+(point[1]-axis_point[1])*ny
+                edge=max(0,runway['props']['width']/2+side_offset)
+                row=runway_side_label(oid,point,item.get('label','ARP'),u,(-nx,-ny),edge,paved(),clearance)
             if kind=='HS':
                 from shapely.geometry import LineString
                 row.update(chart_box=stroke,chart_pavement=paved(True),chart_terminal_labels=terminal_labels)
                 if item.get('vertices'):row['chart_hotspot_boundary']=LineString(path)
             add(kind,row)
+    from shapely.geometry import box
+    from automatic_markings import runway_components
+    occupied=[]
+    text_footprints=[]
+    def reserve(item):
+        x,y=item['points'][0]
+        unit=max(1,extent/1100)
+        w=max(8,len(item.get('text',''))*4)*unit
+        h=9*unit
+        dx,dy=item.get('chart_offset',(0,0))
+        footprint=box(x+dx*unit-w,y-dy*unit-h,x+dx*unit+w,y-dy*unit+h)
+        occupied.append(footprint)
+        if item.get('text'):text_footprints.append(footprint)
+    for item in rows:
+        if item['type']=='text':reserve(item)
+    pavement=paved(True)
+    def clear_position(origin,direction,half_width,half_height):
+        for step in range(1,161):
+            x,y=(origin[i]+direction[i]*step*clearance for i in (0,1))
+            footprint=box(x-half_width,y-half_height,x+half_width,y+half_height)
+            if not pavement.intersects(footprint) and not any(r.intersects(footprint) for r in occupied):
+                occupied.append(footprint)
+                return x,y
+        return None
+
+    for oid,item in config.get('symbols',{}).items():
+        kind=item['kind']
+        if kind not in NAV_SYMBOLS or not show(kind,oid):continue
+        origin=symbol_point(scene,item)
+        caption=item.get('label',kind)
+        size=max(clearance,extent*.018)
+        if kind=='TOWER' or item.get('manual_position'):
+            point=origin
+            caption_point=clear_position(origin,(0,-1),
+                                         max(clearance,len(caption)*extent/220),clearance)
+        else:
+            point=clear_position((origin[0],origin[1]+clearance),(0,-1),
+                                 max(size,len(caption)*extent/220),size*1.5)
+            caption_point=point
+            if point is None:point=origin
+        if point:
+            ink=colors(config,kind,oid)[0]
+            add(kind,dict(label(oid,point,'',19,ink),chart_symbol=kind,
+                          symbol_variant=item.get('variant'),symbol_fill=None,chart_symbol_max=size))
+            if caption_point is not None:
+                row=label(oid,caption_point,caption,10,ink,dy=0 if kind=='TOWER' or item.get('manual_position') else -16)
+                add(kind,row)
+                reserve(row)
+
+    runway_pavement=unary_union(shape_polygon(g.rectangle(a['points'],a['props']['width']))
+                                for a in scene.assets.values()
+                                if a['kind']=='RUNWAY' and show('RUNWAY',a['id']))
+
+    def elevation_position(threshold,direction,width,displaced,text):
+        unit=max(1,extent/1100)
+        half_width=max(8,len(text)*4)*unit
+        half_height=9*unit
+        normal=runway_normal(direction)
+        routes=[(normal,width/2),((-normal[0],-normal[1]),width/2)]
+        if not displaced:routes.insert(0,(direction,0.))
+        steps=[]
+        for priority,((ux,uy),edge) in enumerate(routes):
+            initial=edge+abs(ux)*half_width+abs(uy)*half_height+unit
+            steps.extend((initial+step*unit,priority,ux,uy) for step in range(160))
+        # At an intersecting runway both lateral rays can stay blocked.
+        # Search diagonally as a fallback while keeping the threshold as origin.
+        if displaced:
+            for lateral in (normal,(-normal[0],-normal[1])):
+                for sign in (1,-1):
+                    ux,uy=(2**-.5*(n+sign*d) for n,d in zip(lateral,direction))
+                    initial=width/2+abs(ux)*half_width+abs(uy)*half_height+unit
+                    steps.extend((initial+step*unit,2,ux,uy) for step in range(160))
+        for distance,_,ux,uy in sorted(steps):
+            x=threshold[0]+ux*distance
+            y=threshold[1]+uy*distance
+            footprint=box(x-half_width,y-half_height,x+half_width,y+half_height)
+            if not runway_pavement.intersects(footprint) and not any(
+                    obstacle.intersects(footprint) for obstacle in text_footprints):
+                return x,y
+        return None
+    for oid,runway in scene.assets.items():
+        if runway['kind']!='RUNWAY' or not show('RUNWAY',oid):continue
+        props=runway['props']
+        axis=g.unit(*runway['points'])
+        width=props['width']
+        for mark in runway_components(runway).values():
+            key=mark['props']['mark_type']
+            if key=='THRESHOLD_BAR' and show('DISPLACED',oid) and not (use_cross and oid in closed):
+                a,b=mark['points']
+                center=[(x+y)/2 for x,y in zip(a,b)]
+                normal=(-axis[1],axis[0])
+                half_depth=max(3.,width*.09)
+                rectangle=[[center[i]+axis[i]*x+normal[i]*y for i in (0,1)]
+                           for x,y in ((-half_depth,-width*.55),(half_depth,-width*.55),
+                                       (half_depth,width*.55),(-half_depth,width*.55))]
+                add('DISPLACED',polygon(oid,rectangle,*colors(config,'DISPLACED',oid)))
+            elif key=='AIMING_POINT' and show('AIM',oid):
+                origin,toward=mark['points']
+                u=g.unit(origin,toward)
+                normal=(-u[1],u[0])
+                center=[origin[i]+u[i]*mark['props']['aim_length']/2 for i in (0,1)]
+                edge=[center[i]+normal[i]*width/2 for i in (0,1)]
+                point=clear_position(edge,normal,clearance,clearance)
+                if point:
+                    add('AIM',dict(label(oid,point,'',16,colors(config,'AIM',oid)[0]),
+                                   chart_symbol='AIM',symbol_fill=None,chart_symbol_max=clearance*2))
+        for end,point in zip('ab',(runway['points'][0],runway['points'][-1])):
+            if not show('ELEV',oid):continue
+            elevation=props.get('elevation_'+end)
+            if elevation is None:elevation=scene.data['meta'].get('airport_elevation') or 0
+            unit=props.get('elevation_unit','m')
+            if unit not in ('m','ft'):unit='m'
+            value=f"ELEV {elevation*UNITS[unit]:.0f}"+(' ft' if unit=='ft' else '')
+            direction=(-axis[0],-axis[1]) if end=='a' else axis
+            displacement=min(g.length(runway['points']),props.get('displaced_'+end,0) or 0)
+            threshold=[point[i]-direction[i]*displacement for i in (0,1)]
+            location=elevation_position(threshold,direction,width,displacement>0,value)
+            if location:
+                row=label(oid,location,value,10,colors(config,'ELEV',oid)[0])
+                row['elevation_end']=end
+                add('ELEV',row)
+                reserve(row)
     # Draw the labels above all pavement and structural geometry.
     return [item for item in rows if item['type']!='text']+[item for item in rows if item['type']=='text'],kinds
 
@@ -380,12 +591,23 @@ def fit_extent(items):
 
 
 def arp_runway(scene,point,binding=None):
-    bound=scene.assets.get(binding)
-    if bound and bound['kind']=='RUNWAY':return bound
-    return min((a for a in scene.assets.values() if a['kind']=='RUNWAY'
-                and g.project(a['points'],point)[0]<=a['props']['width']/2),
-               key=lambda a:g.project(a['points'],point)[0],default=None)
+    def lateral_distance(runway):
+        start,end=runway['points']
+        ux,uy=g.unit(start,end)
+        x,y=point[0]-start[0],point[1]-start[1]
+        station=x*ux+y*uy
+        lateral=abs(y*ux-x*uy)
+        if (-1e-8<=station<=g.distance(start,end)+1e-8
+                and lateral<=runway['props']['width']/2+1e-8):
+            return lateral
+        return None
 
+    bound=scene.assets.get(binding)
+    if bound and bound['kind']=='RUNWAY' and lateral_distance(bound) is not None:
+        return bound
+    matches=((distance,a) for a in scene.assets.values() if a['kind']=='RUNWAY'
+             and (distance:=lateral_distance(a)) is not None)
+    return min(matches,key=lambda pair:pair[0],default=(None,None))[1]
 
 def arp_diameter(runway,point):
     lateral=g.project(runway['points'],point)[0]
@@ -397,8 +619,27 @@ def symbol_scale(item,zoom,pixel_factor=1.):
     return pixel_factor if diameter is None else min(pixel_factor,diameter*zoom/20)
 
 
-def symbol_parts(kind):
+def symbol_parts(kind,variant=None):
     ring=[(9*math.cos(i*math.tau/32),9*math.sin(i*math.tau/32)) for i in range(32)]
+    if kind=='AIM':
+        return [('polygon',[(0,-9),(8,6),(-8,6)])]
+    if kind=='TOWER':
+        if variant=='tower':
+            return [('polygon',[(-8,-8),(8,-8),(5,-2),(-5,-2)]),
+                    ('line',[(-3,-2),(-5,9),(5,9),(3,-2)])]
+        return [('polygon',[(r*math.sin(i*math.pi/5),-r*math.cos(i*math.pi/5))
+                            for i,r in enumerate((9,4)*5)])]
+    if kind in ('VOR','DME','NDB'):
+        def dot(x,y):
+            return 'polygon',[(x+math.cos(i*math.tau/8),y+math.sin(i*math.tau/8)) for i in range(8)]
+        if kind=='NDB':
+            return [dot(0,0)]+[dot(r*math.cos(i*math.tau/count),r*math.sin(i*math.tau/count))
+                               for r,count in ((4,8),(8,14)) for i in range(count)]
+        outer=[(9*math.cos(i*math.tau/6),9*math.sin(i*math.tau/6)) for i in range(6)] if kind=='VOR' else [(-8,-8),(8,-8),(8,8),(-8,8)]
+        return [('polygon',outer),dot(0,0)]
+    if kind=='PAPI':
+        return [('polygon',ring),('line',[(-2.5,4.5),(-2.5,-4.5)]),
+                ('line',[(-2.5,-4.5),(1,-4.5),(3,-3),(3,-1),(1,.5),(-2.5,.5)])]
     if kind=='HS':
         return [('polygon',ring)]
     if kind=='ARP':
@@ -415,7 +656,7 @@ def pixel_items(items,scale,pixel_factor=1):
             if 'chart_symbol' in row:
                 factor=symbol_scale(row,scale,pixel_factor)
                 if factor<=0:continue
-                for typ,points in symbol_parts(row['chart_symbol']):
+                for typ,points in symbol_parts(row['chart_symbol'],row.get('symbol_variant')):
                     shape=[[x+dx*factor/scale,y-dy*factor/scale] for dx,dy in points]
                     yield (dict(polygon(row['oid'],shape,row['fill'],row['symbol_fill']),width=pixel_factor/scale)
                            if typ=='polygon' else line(row['oid'],shape,row['fill'],pixel_factor/scale))
@@ -547,8 +788,8 @@ def page_items(scene, items, kinds, region, page, info=None):
         dx=indent
         if align!='center':dx+=(1 if align=='left' else -1)*text_width(value,size)/2
         result.append(dict(label('F8_PAGE:'+group,[x,y],value,size,color,dx=dx,dy=dy),rotation=angle))
-    def rule(points,color='#262626'):
-        result.append(line('F8_PAGE:'+group,points,color,width*.0013))
+    def rule(points,color='#262626',weight=1):
+        result.append(line('F8_PAGE:'+group,points,color,width*.0013*weight))
     def swatch(points,stroke,fill):
         result.append(polygon('F8_PAGE:'+group,points,stroke,fill))
     # Intersect the map geometry itself so the header/footer stay clear.
@@ -638,6 +879,8 @@ def page_items(scene, items, kinds, region, page, info=None):
             note_rows.extend((hanging,value) for value in lines_[1:])
         else:
             note_rows.extend((hanging,value) for value in (textwrap.wrap(raw.strip(),width=44) or ['']))
+    if 'CLOSURE' in kinds:
+        note_rows.extend((0,value) for value in textwrap.wrap(tr(CLOSURE_NOTES[closure_style(config)]),width=44))
     if note_rows:
         group='note'
         x=x0+(x1-x0)*.055
@@ -648,7 +891,7 @@ def page_items(scene, items, kinds, region, page, info=None):
             text(x,note_y-index*spacing,value,10,align='left',indent=indent)
     if info.get('legend',True):
         group='legend'
-        entries=[kind for kind in TYPES if kind in kinds]
+        entries=[kind for kind in (*TYPES,'CLOSURE') if kind in kinds]
         count=max(1,min(6,int(info.get('legend_count',2))))
         vertical=info.get('legend_direction')=='vertical'
         columns=count if vertical else max(1,math.ceil(len(entries)/count))
@@ -657,13 +900,30 @@ def page_items(scene, items, kinds, region, page, info=None):
             col,row=(index//rows,index%rows) if vertical else (index%columns,index//columns)
             x=(x0+(x1-x0)*((col+.66)/columns)) if not vertical else x0+width*(.065+col*.135)
             y=y1+width*(.216+header-row*.016) if not vertical else y1-width*(.04+row*.019)
-            stroke,fill=colors(config,kind)
             a=x-min(width*.045,(x1-x0)*.15/columns)
             half_width=width*.012
             half_height=width*.004
-            if kind in ('ARP','WIND'):
+            if kind=='ELEV':
+                text(a,y,'ELEV',8)
+                text(x,y,tr(TYPES[kind][0]),9)
+                continue
+            if kind=='CLOSURE':
+                if closure_style(config)=='cross':
+                    ink=colors(config,'TAXIWAY')[1]
+                    for position in (-.65,0,.65):
+                        cx=a+position*half_width
+                        for sign in (-1,1):
+                            rule([(cx-half_height,y-sign*half_height),(cx+half_height,y+sign*half_height)],ink,1.2)
+                else:
+                    rule([(a-half_width,y),(a+half_width,y)],CLOSURE_RED)
+                text(x,y,tr(CLOSURE_LABEL),9)
+                continue
+            stroke,fill=colors(config,kind)
+            if kind in ('ARP','WIND','PAPI','AIM',*NAV_SYMBOLS):
                 ink='#000000' if kind=='ARP' else stroke
-                for typ,points in symbol_parts(kind):
+                variant=next((item.get('symbol_variant') for item in items
+                              if item.get('chart_symbol')=='TOWER'),None) if kind=='TOWER' else None
+                for typ,points in symbol_parts(kind,variant):
                     shape=[(a+dx*half_height/9,y-dy*half_height/9) for dx,dy in points]
                     if typ=='polygon':swatch(shape,ink,None if kind=='ARP' else fill)
                     else:rule(shape,ink)

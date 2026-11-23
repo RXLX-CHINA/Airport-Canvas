@@ -52,7 +52,37 @@ def boolean(editor,operation):
         editor.select(ids[0]);editor.selected_ids=set(ids);editor.refresh();editor.status.set('布尔运算完成；Ctrl+Z撤销。孔洞保留，多个区域置于同一组。')
     except (KeyError,ValueError) as exc:editor.status.set(str(exc))
 
+SPECIAL_APRONS={
+    'APRON_CARGO23':('货机坪','CARGO'),
+    'APRON_RUNUP23':('试车坪','RUNUP'),
+    'APRON_DEICE_POLY':('除冰坪','DEICING'),
+}
+
+
+def finish_special_apron(editor):
+    from geometry11 import Polygon
+    points=list(editor.points)
+    if len(points)<3:
+        editor.status.set('至少需要三个顶点。')
+        return
+    shape=Polygon(points)
+    if not shape.is_valid or shape.area<=0:
+        editor.status.set('多边形边缘不能交叉。')
+        return
+    name,code=SPECIAL_APRONS[editor.mode]
+    aid=editor.scene.create_asset('APRON',name,points,destination_code23=code,
+                                  apron_shape20_18='POLYGON',**({'role':'DEICING'} if code=='DEICING' else {}))
+    editor.set_mode('SELECT')
+    editor.select(aid)
+    editor.refresh()
+
+
 def apron_click(editor,e):
+    if editor.mode in SPECIAL_APRONS:
+        point=list(editor.world(e.x,e.y))
+        if not editor.points or g.distance(editor.points[-1],point)>.01:editor.points.append(point)
+        preview(editor,e)
+        return 'break'
     q=editor.world(e.x,e.y);anchor=editor.__dict__.get('_apron_anchor20_18')
     if anchor is None:editor._apron_anchor20_18=q;editor.status.set('请选择第二个对角点；右键取消。');return 'break'
     try:
@@ -98,6 +128,12 @@ def preview(editor,e):
             pts=g.subpath(a['points'],0 if keep=='END' else s,s if keep=='END' else g.length(a['points']))
             c.create_line(*[n for p in pts for n in editor.screen(p)],fill='#d74646',width=4,dash=(6,4),tags='workspace20_18')
         except ValueError as exc:editor.status.set(str(exc))
+    elif editor.mode in SPECIAL_APRONS:
+        points=[*editor.points,list(editor.world(e.x,e.y))]
+        if len(points)>1:
+            if len(points)>2:points.append(points[0])
+            editor.canvas.create_line(*[v for p in points for v in editor.screen(p)],
+                                      fill='#e7c640',width=2,dash=(5,3),tags='workspace20_18')
     elif editor.__dict__.get('_apron_anchor20_18') is not None:
         try:
             pts=__import__('apron_ops20_18').shape('TRAPEZOID' if editor.mode=='APRON_TRAP20_18' else 'RECTANGLE',editor._apron_anchor20_18,q)

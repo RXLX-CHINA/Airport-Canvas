@@ -192,7 +192,7 @@ class CurveEditor(LiveEditor):
             if a['kind']=='STAND':
                 section=self.section('机位引入线与机型包络')
                 self.property_field(section,'lead_type','引入线类型',p.get('lead_type','A'),'radio',list('ABCD'))
-                for key,label,default in [('lead_radius','引入转弯半径 m',20),('aircraft_length','飞机长度 m',40),('aircraft_span','飞机翼展 m',36),('fuselage_width','机身宽度 m',4),('wing_station','机翼距机头 m',18),('safety_clearance','包络净距 m',4.5)]:self.property_field(section,key,label,p.get(key,default))
+                for key,label,default in [('lead_radius','引入转弯半径 m',20),('aircraft_length','飞机长度 m',40),('aircraft_span','飞机翼展 m',36),('fuselage_width','机身宽度 m',4),('wing_station','机翼距机头 m',18),('safety_clearance','包络净距 m',4.5)]:self.property_field(section,key,'机位直径 m' if key=='aircraft_span' and p.get('helicopter_stand') else label,p.get(key,default))
             if a['kind']=='RUNWAY':
                 section=self.section('磁航向与自动编号')
                 self.property_field(section,'auto_number','自动编号',p.get('auto_number',False),'bool')

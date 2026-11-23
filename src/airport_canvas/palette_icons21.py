@@ -39,13 +39,13 @@ def structure(key):
         line([(8,30),(27,30),(52,10),(65,10)],YELLOW,2)
         line([(28,30),(43,30),(58,35)],PAVE,11)
         line([(28,30),(43,30),(58,35)],YELLOW,2)
-    elif key in ('STAND','REMOTE_STAND','AUX_STAND19','HANGAR19'):
+    elif key in ('STAND','REMOTE_STAND','GA_STAND','AUX_STAND19','HANGAR19'):
         line([(16,5),(16,32),(56,32),(56,5)],INK,2)
         line([(36,36),(36,9)],YELLOW if key!='AUX_STAND19' else '#8c9dab')
         line([(28,14),(44,14)],INK)
         if key=='STAND':
             line([(59,8),(53,8),(46,15)],INK,5)
-        elif key=='REMOTE_STAND':
+        elif key in ('REMOTE_STAND','GA_STAND'):
             line([(30,34),(36,28),(42,34)],INK,2)
         elif key=='HANGAR19':
             line([(14,13),(36,3),(58,13)],INK,4)

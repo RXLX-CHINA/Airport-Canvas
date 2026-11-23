@@ -27,6 +27,7 @@ class ChartView:
         layout=W.QVBoxLayout(self.palette)
         self.draft=[]
         self.hover=None
+        self.symbol_drag=None
         self.buttons={}
         for kind in chart.SYMBOLS:
             button=W.QPushButton(chart.TYPES[kind][0])
@@ -75,7 +76,6 @@ class ChartView:
         if app._color17:app.toggle_color17(False)
         app.set_mode('SELECT')
         app.select(None)
-        self.normal_camera=(self.scene,app.zoom,list(app.origin),getattr(app.canvas,'rotation21_2',0.))
         self.active=True
         self.selection_scene=self.scene
         self.action.setChecked(True)
@@ -97,7 +97,7 @@ class ChartView:
         self.properties()
         app.status.set('航图模式 · 点击对象编辑配色，F8 返回')
         app.canvas.focus_set()
-        app.fit()
+        app.redraw()
         return 'break'
 
     def leave(self,redraw=True):
@@ -117,16 +117,14 @@ class ChartView:
         for tag in ('chart_f8_labels','chart_f8_badge','chart_f8_preview','frame11'):c.delete(tag)
         c.itemconfigure('chart_f8_surface',state='hidden')
         c.itemconfigure('map',state='normal')
-        scene,zoom,origin,rotation=self.normal_camera
-        if self.scene is scene:
-            self.app.zoom,self.app.origin,c.rotation21_2=zoom,origin,rotation
-            c.camera21(origin,zoom)
+        c.camera21(self.app.origin,self.app.zoom)
         c.q.setBackgroundBrush(G.QColor('#131d27' if self.app.dark_mode_enabled() else '#e9eef2'))
         from bitmap_layers46 import draw
         draw(self.app)
         if redraw:self.app.redraw()
 
     def choose(self,kind,focus=True):
+        self.cancel_symbol_drag()
         self.tool=kind
         self.draft=[]
         self.hover=None
@@ -168,7 +166,7 @@ class ChartView:
         if not self.tool or self.hover is None:return
         point,runway=self.snap(*self.hover)
         x,y=self.app.screen(point)
-        ink=chart.colors(self.config(),'ARP')[0] if self.tool=='ARP' else '#086e86'
+        ink='#086e86'
         if self.tool=='HS' and self.draft:
             mode=self.shape.currentData()
             path=chart.hotspot_path(mode,[*self.draft,point])
@@ -177,6 +175,8 @@ class ChartView:
                 c.create_oval(px-3,py-3,px+3,py+3,outline='#e6780a',fill='white',width=2,tags=tag)
         else:
             asset=chart.arp_runway(self.scene,point,runway) if self.tool=='ARP' else None
+            if self.tool=='ARP':
+                ink=chart.colors(self.config(),'ARP')[0] if asset else '#000000'
             symbol={'chart_symbol_max':chart.arp_diameter(asset,point)} if asset else {}
             factor=chart.symbol_scale(symbol,self.app.zoom)
             for typ,pts in chart.symbol_parts(self.tool) if factor>0 else ():
@@ -284,6 +284,7 @@ class ChartView:
         c.delete('chart_f8_labels')
         c.delete('chart_f8_badge')
         self.labels=[]
+        self.elevation_labels={}
         for item in self.items:
             if item['type']!='text':continue
             x,y=app.screen(item['points'][0])
@@ -301,7 +302,7 @@ class ChartView:
             oid=item['oid']
             if 'chart_symbol' in item:
                 factor=chart.symbol_scale(item,app.zoom)
-                for typ,pts in chart.symbol_parts(item['chart_symbol']) if factor>0 else ():
+                for typ,pts in chart.symbol_parts(item['chart_symbol'],item.get('symbol_variant')) if factor>0 else ():
                     coords=[v for px,py in pts for v in (x+px*factor,y+py*factor)]
                     if typ=='polygon':
                         tag=c.create_polygon(*coords,outline=item['fill'],fill=item['symbol_fill'],width=1,tags='chart_f8_labels')
@@ -317,6 +318,7 @@ class ChartView:
             tag=c.create_text(x+dx,y+dy,text=item['text'],fill=item['fill'],font=font,angle=angle,
                               tags='chart_f8_labels',**size)
             self.labels.append((tag,oid))
+            if 'elevation_end' in item:self.elevation_labels[tag]=(oid,item['elevation_end'])
             if 'chart_box' in item:
                 left,top,right,bottom=c.bbox(tag)
                 hw,hh=(right-left)/2+3,(bottom-top)/2+2
@@ -362,9 +364,59 @@ class ChartView:
             attachment={'runway':runway} if runway else {}
             self.place_symbol(self.tool,point,**attachment)
             return 'break'
+        elevation_end=None
         self.selected=self.pick(point,x,y)
-        self.properties()
+        for tag,(oid,end) in reversed(list(self.elevation_labels.items())):
+            bounds=self.app.canvas.bbox(tag)
+            if bounds and bounds[0]<=x<=bounds[2] and bounds[1]<=y<=bounds[3]:
+                self.selected=oid
+                elevation_end=end
+                break
+        symbol=self.config().get('symbols',{}).get(self.selected)
+        if symbol:
+            # Use the displayed anchor, which may differ from the saved point
+            # for navigation symbols with automatic placement.
+            anchor=next((item['points'][0] for item in self.items
+                         if item['oid']==self.selected and 'chart_symbol' in item),
+                        chart.symbol_point(self.scene,symbol))
+            self.symbol_drag=(self.scene,self.selected,(x,y),point,anchor)
+        self.properties(elevation_end)
         self.selection_frame()
+        return 'break'
+
+    def cancel_symbol_drag(self):
+        self.symbol_drag=None
+        self.app.canvas.delete('chart_f8_drag')
+
+    def drag_symbol(self,event):
+        drag=self.symbol_drag
+        if drag and math.dist(drag[2],(event.x,event.y))>=4:
+            mouse=self.app.world(event.x,event.y)
+            point=[anchor+end-start for anchor,end,start in zip(drag[4],mouse,drag[3])]
+            x,y=self.app.screen(point)
+            canvas=self.app.canvas
+            canvas.delete('chart_f8_drag')
+            canvas.create_oval(x-8,y-8,x+8,y+8,outline='#087f60',width=2,tags='chart_f8_drag')
+        return 'break'
+
+    def release_symbol(self,event):
+        drag=self.symbol_drag
+        self.cancel_symbol_drag()
+        if not drag:return 'break'
+        scene,oid,press,start,anchor=drag
+        symbol=self.config().get('symbols',{}).get(oid)
+        if scene is not self.scene or symbol is None or math.dist(press,(event.x,event.y))<4:
+            return 'break'
+        mouse=self.app.world(event.x,event.y)
+        delta=[end-begin for end,begin in zip(mouse,start)]
+        value=dict(symbol,point=[p+d for p,d in zip(anchor,delta)])
+        if symbol['kind'] in chart.NAV_SYMBOLS:value['manual_position']=True
+        if symbol['kind']=='ARP':
+            value.pop('runway',None)
+            value.pop('auto_runway_center',None)
+        if symbol.get('vertices'):
+            value['vertices']=[[p+d for p,d in zip(vertex,delta)] for vertex in symbol['vertices']]
+        self.change('symbols',oid,value)
         return 'break'
 
     def pick(self,point,x,y):
@@ -411,7 +463,7 @@ class ChartView:
         refresh()
         return button
 
-    def properties(self):
+    def properties(self,elevation_end=None):
         from model20 import axis
         holder=W.QWidget()
         form=W.QFormLayout(holder)
@@ -420,6 +472,8 @@ class ChartView:
         symbol=config.get('symbols',{}).get(oid)
         asset=self.scene.assets.get(oid) or (axis(self.scene,oid) if oid else None)
         kind=symbol['kind'] if symbol else self.kinds_by_owner.get(oid) or (chart.category(asset) if asset else 'STOPWAY' if oid and ':stopway:' in oid else None)
+        if asset and asset['kind']=='RUNWAY':kind='RUNWAY'
+        focus=None
         if self.tool=='HS':
             self.shape.setParent(None)
             form.addRow('热点工具 / 形状',self.shape)
@@ -431,7 +485,7 @@ class ChartView:
         elif kind in chart.TYPES:
             form.addRow(W.QLabel(asset['name'] if asset else chart.TYPES[kind][0]))
             form.addRow('线条颜色',self.color_button(kind,'stroke',oid))
-            if kind not in ('ARP','HS'):form.addRow('道面颜色',self.color_button(kind,'fill',oid))
+            if chart.TYPES[kind][2] is not None and kind!='HS':form.addRow('道面颜色',self.color_button(kind,'fill',oid))
             reset=W.QPushButton('恢复类型配色')
             def reset_color():
                 self.change('objects',oid,None)
@@ -439,6 +493,15 @@ class ChartView:
             reset.clicked.connect(reset_color)
             form.addRow(reset)
             if kind=='RUNWAY':
+                for end in ('a','b'):
+                    field='elevation_'+end
+                    value=asset['props'].get(field)
+                    control=W.QLineEdit('' if value is None else str(value))
+                    control.setPlaceholderText(tr('机场海拔 (m)'))
+                    control.editingFinished.connect(lambda field=field,control=control:
+                                                    self.save_elevation(oid,field,control))
+                    form.addRow(tr('跑道端海拔 (m，可空)')+' '+end.upper(),control)
+                    if end==elevation_end:focus=control
                 unit=W.QComboBox()
                 unit.addItems(chart.UNITS)
                 unit.setCurrentText(config.get('units',{}).get(oid,'m'))
@@ -451,9 +514,17 @@ class ChartView:
                 material.currentIndexChanged.connect(lambda _:self.change('surfaces',oid,material.currentData()))
                 form.addRow('跑道道面材质',material)
             if symbol:
+                if kind=='TOWER':
+                    variant=W.QComboBox()
+                    for code,caption in [('star','五角星'),('tower','塔状符号')]:
+                        variant.addItem(tr(caption),code)
+                    variant.setCurrentIndex(int(symbol.get('variant')=='tower'))
+                    variant.currentIndexChanged.connect(lambda _:self.change(
+                        'symbols',oid,dict(self.config()['symbols'][oid],variant=variant.currentData())))
+                    form.addRow(tr('控制塔符号'),variant)
                 name=W.QLineEdit(symbol['label'])
                 name.setMaxLength(12)
-                name.editingFinished.connect(lambda:self.change('symbols',oid,dict(symbol,label=name.text().strip() or kind)))
+                name.editingFinished.connect(lambda:self.change('symbols',oid,dict(self.config()['symbols'][oid],label=name.text().strip() or kind)))
                 form.addRow('标号',name)
                 remove=W.QPushButton('删除标识')
                 def delete():
@@ -464,7 +535,13 @@ class ChartView:
                 form.addRow(remove)
         else:
             form.addRow(W.QLabel('航图可见对象'))
-            present=chart.present_types(self.scene)
+            closure=W.QComboBox()
+            for mode,caption in [('red','红色中线'),('cross','道面同色 ×')]:
+                closure.addItem(tr(caption),mode)
+            closure.setCurrentIndex(max(0,closure.findData(chart.closure_style(config))))
+            closure.currentIndexChanged.connect(lambda _:self.change('closure','style',closure.currentData()))
+            form.addRow(tr('关闭道面标注'),closure)
+            present=chart.present_types(self.scene) | {'AIM','DISPLACED','ELEV'}
             for kind,(caption,_,_) in chart.TYPES.items():
                 if kind not in present:continue
                 box=W.QCheckBox(caption)
@@ -474,7 +551,26 @@ class ChartView:
         if self.tool!='HS' and self.shape.parentWidget() is not None:
             self.shape.setParent(None)
         self.right.setWidget(holder)
+        if focus:
+            focus.setFocus()
+            focus.selectAll()
         if self.tool=='HS':self.shape.show()
+
+    def save_elevation(self,oid,field,control):
+        runway=self.scene.assets.get(oid)
+        if not runway:return
+        previous=runway['props'].get(field)
+        text=control.text().strip()
+        try:
+            value=float(text) if text else None
+            if value is not None and not math.isfinite(value):raise ValueError
+        except ValueError:
+            control.setText('' if previous is None else str(previous))
+            self.app.status.set(tr('请输入有效的海拔数值'))
+            return
+        if value!=previous:
+            self.scene.update_asset(oid,props={field:value})
+            self.app.redraw()
 
     def palette_dialog(self):
         dialog=W.QDialog(self.app.q)
@@ -490,7 +586,7 @@ class ChartView:
         for row,(kind,(caption,_,_)) in enumerate(chart.TYPES.items(),1):
             layout.addWidget(W.QLabel(caption),row,0)
             layout.addWidget(self.color_button(kind,'stroke'),row,1)
-            if kind not in ('ARP','HS'):layout.addWidget(self.color_button(kind,'fill'),row,2)
+            if chart.TYPES[kind][2] is not None and kind!='HS':layout.addWidget(self.color_button(kind,'fill'),row,2)
         area.setWidget(content)
         outer.addWidget(area)
         close=W.QPushButton('完成')

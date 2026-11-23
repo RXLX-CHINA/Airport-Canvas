@@ -79,6 +79,21 @@ def save(app,filename):
                             maximized=str(app.q.isMaximized()))
     write(config,filename)
 
+def batch_stand_preferences(filename):
+    try:
+        value=json.loads(read(filename).get('editing','batch_stands',fallback='{}'))
+    except ValueError:
+        return {}
+    return value if isinstance(value,dict) else {}
+
+
+def save_batch_stand_preferences(filename,values):
+    config=read(filename)
+    if 'editing' not in config:config.add_section('editing')
+    config['editing']['batch_stands']=json.dumps(values,ensure_ascii=False)
+    write(config,filename)
+
+
 def recent_projects(filename):
     config=read(filename)
     try:entries=json.loads(config.get('files','recent',fallback='[]'))

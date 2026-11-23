@@ -10,7 +10,63 @@ def envelope(a,scene):
         d['neck_start']=d['wing']+(d['wide']-d['narrow'])/a['props']['safety_slope15'];d['nose_end']=d['neck_start']+max(.5,a['props'].get('safety_neck',15.))
     return d
 
+GA_FIELDS = {
+    'ga_text': ('引入侧框内文字', ''),
+    'ga_text_color': ('文字颜色', '#ffffff'),
+    'ga_frame_color': ('线框颜色', '#ff0000'),
+    'ga_outline_color': ('线框描边颜色', '#ffff00'),
+}
+
+
+def ga_stand_props():
+    return dict(ga_stand=True, remote_stand=True, has_bridge=False, stand_support=False,
+                **{key: default for key, (_, default) in GA_FIELDS.items()})
+
+
+def ga_color(props,key):
+    import re
+    value = props.get(key,'')
+    return value if re.fullmatch(r'#[0-9a-fA-F]{6}',str(value)) else GA_FIELDS[key][1]
+
+
+def ga_labels(a):
+    props = a['props']
+    corners = safety(None,a)
+    oid = a['id']
+    edge = [(x+y)/2 for x,y in zip(corners[0],corners[1])]
+    axis = g.unit(*a['points'][-2:])
+    height = min(max(.5,props.get('number_height',4)),g.distance(corners[0],corners[1])/4,
+                 g.distance(corners[0],corners[-1])/4)
+    angle = (math.degrees(math.atan2(axis[1],axis[0]))+180)%180-90
+    entries = [(props.get('ga_text',''),height)]
+    if props.get('show_number',True):
+        entries.append((props.get('stand_number') or a['name'],-height))
+    for value,offset in entries:
+        if value:
+            point = [edge[i]+axis[i]*offset for i in (0,1)]
+            size = min(height,g.distance(corners[0],corners[1])/len(str(value)))
+            yield dict(type='text',oid=oid,points=[point],text=str(value),fill=ga_color(props,'ga_text_color'),
+                       size=size,rotation=angle,world_text=True,font='hei')
+
+
+def helicopter_stand_props():
+    return dict(helicopter_stand=True,has_bridge=False,stand_support=False,show_safety=True)
+
+
 def safety(scene,a):
+    props = a['props']
+    if props.get('helicopter_stand'):
+        x,y=a['points'][-1]
+        radius=max(1,props.get('aircraft_span',12)*.65)
+        return [[x+radius*math.cos(i*math.tau/64),y+radius*math.sin(i*math.tau/64)] for i in range(64)]
+    if props.get('ga_stand'):
+        end = a['points'][-1]
+        u = g.unit(*a['points'][-2:])
+        v = (-u[1],u[0])
+        length = max(1,props.get('aircraft_length',40))/2
+        width = max(1,props.get('aircraft_span',36))/2
+        return [[end[k]+x*u[k]+y*v[k] for k in (0,1)] for x,y in
+                ((-length,-width),(-length,width),(length,width),(length,-width))]
     d=envelope(a,scene);q=a['points'][-1];_,u,v=frame(a)
     pts=[(d['tail'],-d['wide']),(d['wing'],-d['wide']),(d['neck_start'],-d['narrow']),(d['nose_end'],-d['narrow']),
          (d['nose_end'],d['narrow']),(d['neck_start'],d['narrow']),(d['wing'],d['wide']),(d['tail'],d['wide'])]

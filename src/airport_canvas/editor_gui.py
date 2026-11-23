@@ -3,6 +3,7 @@ import copy
 import json
 import math
 from pathlib import Path
+from interface_language import APPROACH_LEVELS
 import qt_compat as tk
 from qt_compat import ttk,filedialog,messagebox
 from PIL import Image,ImageDraw
@@ -52,7 +53,7 @@ class EditorApp(BaseApp):
         menu=tk.Menu(self);self.config(menu=menu);fm=tk.Menu(menu,tearoff=False);menu.add_cascade(label='文件',menu=fm)
         for title,cmd in [('新建 Ctrl+N',self.new),('打开 Ctrl+O',self.open),('保存 Ctrl+S',self.save),('另存为',lambda:self.save(True)),('导入旧版 JSON',self.import_legacy),('导出 PNG',lambda:self.export('png')),('导出 SVG',lambda:self.export('svg')),('导出分层 PSD',lambda:self.export('psd')),('导出分层 PDF',lambda:self.export('pdf')),('导出分层 PPTX',lambda:self.export('pptx')),('导出灯光 GIF',lambda:self.export('gif')),('导出审阅报告',self.export_report),('退出',self.close)]:fm.add_command(label=title,command=cmd)
         edit=tk.Menu(menu,tearoff=False);menu.add_cascade(label='编辑',menu=edit)
-        for title,cmd in [('撤销 Ctrl+Z',self.undo),('重做 Ctrl+Y',self.redo),('切分路线',self.split_selected),('删除',self.delete_selected),('操纵矩阵',self.movement_matrix),('运行情景',self.edit_scenario),('项目坐标基准',self.project_settings)]:edit.add_command(label=title,command=cmd)
+        for title,cmd in [('撤销 Ctrl+Z',self.undo),('重做 Ctrl+Y',self.redo),('切分路线',self.split_selected),('删除',self.delete_selected),('操纵矩阵',self.movement_matrix),('运行情景',self.edit_scenario),('机场整体参数',self.project_settings)]:edit.add_command(label=title,command=cmd)
         review=tk.Menu(menu,tearoff=False);menu.add_cascade(label='审阅',menu=review);review.add_command(label='打开独立审阅窗口',command=self.open_review);review.add_command(label='规范来源与覆盖',command=self.coverage)
         helpmenu=tk.Menu(menu,tearoff=False);menu.add_cascade(label='帮助',menu=helpmenu);helpmenu.add_command(label='绘图操作说明',command=self.help)
         header=tk.Frame(self,bg='#1b3048',height=44);header.pack(fill='x');header.pack_propagate(False)
@@ -314,7 +315,7 @@ class EditorApp(BaseApp):
                 for key,label,default in [('auto_markings','自动道面标记',True),('center_visible','显示中线',True),('edges_visible','显示边线',True),('shoulder_markings','道肩条带',False)]:self.property_field(style,key,label,p.get(key,default),'bool')
                 if a['kind']=='RUNWAY':
                     for end,title in [('a','A端'),('b','B端')]:
-                        ef=self.section(title+' 跑道标记');self.property_field(ef,'label_'+end,'号码',p.get('label_'+end,'09'),'text');self.property_field(ef,'level_'+end,'进近类别',p.get('level_'+end,'1'),'text',['v','0','1','2','3']);self.property_field(ef,'displaced_'+end,'入口内移 m',p.get('displaced_'+end,0));self.property_field(ef,'lda_'+end,'LDA m',p.get('lda_'+end))
+                        ef=self.section(title+' 跑道标记');self.property_field(ef,'label_'+end,'号码',p.get('label_'+end,'09'),'text');self.property_field(ef,'level_'+end,'进近类别',p.get('level_'+end,'1'),'text',APPROACH_LEVELS);self.property_field(ef,'displaced_'+end,'入口内移 m',p.get('displaced_'+end,0));self.property_field(ef,'lda_'+end,'LDA m',p.get('lda_'+end))
                     for key,label in [('show_numbers','号码'),('show_thresholds','入口条纹'),('show_aimpoints','瞄准点'),('show_tdz','接地带')]:self.property_field(style,key,label,p.get(key,True),'bool')
                 if a['kind']=='STAND':
                     self.property_field(style,'guidance','引导方式',p.get('guidance','GUIDED'),'radio',['GUIDED','UNGUIDED']);self.property_field(style,'stop_reference','停止点参考',p.get('stop_reference','NOSEWHEEL'),'text',['NOSEWHEEL','LEFT_SEAT'])

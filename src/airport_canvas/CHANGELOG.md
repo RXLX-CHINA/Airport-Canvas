@@ -1,3 +1,11 @@
+# v1.1.0 / Airport Canvas 1.1.0
+
+- Refined taxiway intersections, connector geometry, edge markings and holding-position widths.
+- Added separate reverse pavement and centreline geometry controls for rapid exits.
+- Added stand numbering by zone and position.
+- Improved F8 chart symbols, displaced-threshold elevation labels and runway elevation editing.
+- Expanded English interface translations.
+
 # v1.0 · 首次公开发行准备 / Initial public release preparation
 
 作者 / Author — 刃下狼血

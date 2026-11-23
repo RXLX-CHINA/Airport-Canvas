@@ -79,7 +79,7 @@ def asset_guide(scene,a):
         other=next((m[k] for k in ('from','to') if scene.assets[m[k]['asset']]['kind']=='RUNWAY'),None)
         if own and other:
             points=runway_extension(scene,points,scene.assets[other['asset']],0 if own['station']<g.length(a['points'])/2 else -1,
-                                    preserve_exterior=manual,rapid=manual or bool(a['props'].get('rapid_exit')))
+                                    preserve_exterior=True,rapid=manual or bool(a['props'].get('rapid_exit')))
     return points
 
 def closure_items(scene,items,generated):
@@ -165,4 +165,7 @@ def sync_marks(scene):
         if mark['kind']!='MARKING':continue
         runway=scene.assets.get(p.get('label_asset'))
         if p.get('mark_type')=='RWY_CIRCLE' and runway and runway['kind']=='RUNWAY':p.update(width=runway['props']['width']/2,line_width=runway_center_width(scene,runway))
-        if p.get('mark_type')=='HOLD_A' and runway and runway['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE') and not runway['props'].get('hold_include_shoulders13',True):p['width']=min(p['width'],runway['props']['width'])
+        if (p.get('mark_type')=='HOLD_A' and not p.get('hold_width_manual') and runway
+                and runway['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE')
+                and not runway['props'].get('hold_include_shoulders13',True)):
+            p['width']=min(p['width'],runway['props']['width'])
