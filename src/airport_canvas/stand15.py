@@ -9,6 +9,15 @@ def remote_exit_hit(scene,point,tolerance):
     from guidance20 import snap_axis
     return snap_axis(scene,point,{oid:axis for oid,axis in axes(scene).items() if axis['kind'] in TAXIS},tolerance)
 
+def draw_exit_snap(editor,hit,tag):
+    from interface_language import tr
+    x,y=editor.screen(hit[3])
+    color='#35bbd3'
+    editor.canvas.create_oval(x-5,y-5,x+5,y+5,outline=color,width=2,tags=tag)
+    editor.canvas.create_text(x,y-12,text=tr('引出线吸附至滑行道中线'),
+                              fill=color,anchor='s',tags=tag)
+
+
 def remote_stand_props(hit):
     return dict(remote_stand=True,has_bridge=False,show_safety=True,
                 exit_asset=hit[1],exit_station=hit[2])
@@ -94,6 +103,10 @@ def approach_frame(a):
 def geometry(a,scene=None):
     drawn=uses_drawn_lead(a)
     kind=a['props'].get('lead_type','A')
+    if kind=='ICAO':
+        path=rounded_lead(a) if drawn else a['points']
+        return {'paths':[],'numbers':[]},[dict(key='1',points=path,
+                number={},index=0,default_station=min(g.length(path)*.4,8.))]
     if drawn and kind=='C':
         path=rounded_lead(a)
         length=g.length(path)
@@ -127,7 +140,22 @@ def geometry(a,scene=None):
         if kind=='C':key='ENTRY:0'
         if parent and p.get('entry_bindings15',{}).get(key,p.get('entry_attached',True)):
             from stand14 import deform
-            q=g.project(parent['points'],pts[0])[2];pts=deform(pts,[(0,[q[k]-pts[0][k] for k in (0,1)])])
+            _,station,q=g.project(parent['points'],pts[0])
+            pts=deform(pts,[(0,[q[k]-pts[0][k] for k in (0,1)])])
+            if kind=='B':
+                axis=g.at(parent['points'],station)[1]
+                end=pts[-1]
+                offsets=[axis[0]*(y-q[1])-axis[1]*(x-q[0]) for x,y in pts]
+                wanted=offsets[-1]
+                if wanted and any(value*wanted<-.001 for value in offsets):
+                    forward=frame(a)[1]
+                    toward=tuple(end[i]-q[i] for i in (0,1))
+                    if sum(axis[i]*toward[i] for i in (0,1))<0:axis=tuple(-v for v in axis)
+                    along=max(0.,(axis[0]*forward[1]-axis[1]*forward[0])
+                              * math.copysign(1.,axis[0]*toward[1]-axis[1]*toward[0]))
+                    handle=g.distance(q,end)/3
+                    if along>1e-8:handle=min(handle,abs(wanted)/along)
+                    pts=g.cubic(q,end,axis,forward,handle,steps=64)
         number=next((b['number'] for b in raw if b['key']==str(side)),positive['number']);x,y=local(a,number['point']);default=g.project(pts,world(a,[x*scale,y]))[1]
         branches.append(dict(key=str(side),points=pts,number=number,index=len(branches),default_station=default))
     return base,branches
@@ -135,16 +163,16 @@ def geometry(a,scene=None):
 def design(a,scene=None):
     from geometry11 import polygon,LineString,unary_union,lines
     from marking_catalog import primitives
-    base,branches=geometry(a,scene);p=a['props'];kind=p.get('lead_type','A');numbers=[];full=[];h=p.get('number_height',4);margin=p.get('number_clearance15',1.)
+    base,branches=geometry(a,scene);p=a['props'];kind=p.get('lead_type','A');kind='C' if kind=='ICAO' else kind;numbers=[];full=[];h=p.get('number_height',4);margin=p.get('number_clearance15',1.)
     if not branches:return base
     label_frame=approach_frame(a) if kind!='C' else a
     canonical=next((b for b in branches if b['key']=='1'),branches[0]);L=g.length(canonical['points']);station=p.get('label_station14',{}).get('paired',canonical['default_station']/max(L,.01))*L
-    station=max(h+margin,min(max(h+margin,L-h-margin),station));q,u=g.at(canonical['points'],station)
+    station=min(L,max(h+margin,min(max(h+margin,L-h-margin),station)));q,u=g.at(canonical['points'],station)
     if canonical['key']=='-1':
         q=reflected(label_frame,q);_,axis,normal=frame(label_frame);u=[axis[k]*sum(u[j]*axis[j] for j in (0,1))-normal[k]*sum(u[j]*normal[j] for j in (0,1)) for k in (0,1)]
     for b in branches:
         side=int(b['key'])
-        if uses_drawn_lead(a) and kind=='C':
+        if (uses_drawn_lead(a) or p.get('lead_type')=='ICAO') and kind=='C':
             offset=h+margin+1
             n=dict(point=[q[0]-u[1]*offset,q[1]+u[0]*offset],direction=list(u),text_rotation_offset=0)
         elif kind=='C':
@@ -158,8 +186,15 @@ def design(a,scene=None):
         align['points'][0]=branches[0]['points'][-1]
         if g.distance(*[align['points'][i] for i in (0,-1)])>.01:full.append(align)
     if kind=='C':full=[dict(key='DIRECT',points=canonical['points'])]
+    if p.get('ga_stand') or not p.get('show_number',True):
+        base.update(paths=full,numbers=[],full_paths15=full)
+        return base
     masks=[]
-    for n in numbers:
+    for index,n in enumerate(numbers):
+        if scene is not None:
+            mark_id='AUTO:'+a['id']+':STAND_NUMBER'+(':'+str(index) if index else '')
+            if scene.data['generated_overrides'].get(mark_id,{}).get('hidden'):
+                continue
         m=dict(id='plate',points=[n['point'],[n['point'][k]+n['direction'][k]*10 for k in (0,1)]],props=dict(mark_type='STAND_NUMBER',text=p.get('stand_number',a.get('name','101')),text_height=h))
         shape=next(x for x in primitives(m) if x['type']=='polygon');masks.append(polygon(shape['points']).buffer(margin,join_style=2))
     mask=unary_union(masks);paths=[]
@@ -175,7 +210,7 @@ def design(a,scene=None):
 def handles(a,scene=None):
     _,branches=geometry(a,scene);out=[]
     for b in branches:
-        key='ENTRY:0' if a['props'].get('lead_type')=='C' else 'ENTRY:'+b['key']
+        key='ENTRY:0' if a['props'].get('lead_type') in ('C','ICAO') else 'ENTRY:'+b['key']
         if not any(h['key']==key for h in out):out.append(dict(key=key,point=b['points'][0],kind='JUNCTION'))
     if branches:out.append(dict(key='MERGE',point=branches[0]['points'][-1],kind='JUNCTION'))
     for i,n in enumerate(design(a,scene)['numbers']):out.append(dict(key=str(i),point=n['point'],kind='NUMBER'))

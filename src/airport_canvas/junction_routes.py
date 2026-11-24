@@ -24,15 +24,24 @@ def branches(scene,m):
         if not 0<=station<=g.length(a['points']):continue
         q,v=g.at(a['points'],station);v=[x*direction for x in v]
         from connection9 import dot,safe_controls,path_with_controls
-        candidates=[]
-        for i in range(25):
-            s=(length-reach)*i/24;p,u=g.at(path,s);chord=g.unit(p,q)
+        from shapely.geometry import LineString
+
+        stem=LineString(path)
+        target=LineString(a['points'])
+        for i in range(24,0,-1):
+            s=length-reach*i/24
+            p,u=g.at(path,s)
+            chord=g.unit(p,q)
             if dot(u,chord)<-.01 or dot(v,chord)<-.01:continue
-            candidates.append((abs(s-(length-reach)),p,u))
-        if not candidates:continue
-        _,p,u=min(candidates,key=lambda x:x[0]);handle=min(reach*.6,g.distance(p,q)*.4)
-        controls=safe_controls(p,q,u,v,handle);pts=path_with_controls(p,q,controls)
-        result.append(dict(points=pts,station=station,direction=direction,side=side,oid=m['id']+':reverse:'+side,controls=controls))
+            handle=min(reach*.6,g.distance(p,q)*.4)
+            controls=safe_controls(p,q,u,v,handle)
+            pts=path_with_controls(p,q,controls)
+            branch=LineString(pts)
+            if (not branch.is_simple or branch.intersection(stem).length>.01
+                    or branch.intersection(target).length>.01):continue
+            result.append(dict(points=pts,station=station,direction=direction,side=side,
+                               oid=m['id']+':reverse:'+side,controls=controls))
+            break
     return apply_controls(scene,m,result)
 
 def apply_controls(scene,m,result):

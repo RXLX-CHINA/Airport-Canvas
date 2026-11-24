@@ -4,6 +4,8 @@ import math
 from pathlib import Path
 import uuid
 
+from interface_language import tr
+
 UNITS={'米 (m)':1.,'厘米 (cm)':.01,'毫米 (mm)':.001,'千米 (km)':1000.,
        '英尺 (ft)':.3048,'英寸 (in)':.0254}
 MAX_PIXELS=24_000_000
@@ -33,7 +35,7 @@ def validate(data):
             raise ValueError('位图比例或透明度超出范围')
     if total>MAX_ENCODED:raise ValueError('工程内嵌位图超过容量上限，请减少底图或缩小分辨率。')
 
-def add(scene,name,image,scale,center):
+def add(scene,name,image,scale,center,rotation=0.):
     from PySide6.QtCore import QByteArray,QBuffer,QIODevice
     encoded=QByteArray()
     buffer=QBuffer(encoded)
@@ -42,7 +44,7 @@ def add(scene,name,image,scale,center):
     oid='bitmap-'+uuid.uuid4().hex
     row=dict(name=name,png=base64.b64encode(bytes(encoded)).decode('ascii'),
              width=image.width(),height=image.height(),scale=scale,
-             x=center[0],y=center[1],rotation=0.,opacity=1.,locked=False)
+             x=center[0],y=center[1],rotation=rotation,opacity=1.,locked=False)
     with scene.transaction('导入位图底图'):
         scene.data.setdefault('bitmap_layers',{})[oid]=row
     return oid
@@ -109,7 +111,7 @@ def draw(editor):
         item.setVisible(not editor.scene.data['meta'].get('object_display',{}).get(oid,{}).get('hidden'))
         item.setZValue(-9e8+index)
 
-def settings(parent,image,existing=None):
+def settings(parent,image,existing=None,rotation=0.):
     from PySide6 import QtGui,QtCore,QtWidgets as W
     Qt=QtCore.Qt
 
@@ -117,90 +119,214 @@ def settings(parent,image,existing=None):
         def __init__(self):
             super().__init__()
             self.setScene(W.QGraphicsScene(self))
-            self.scene().addPixmap(image)
-            self.image_bounds=QtCore.QRectF(image.rect())
-            self.line=self.scene().addLine(QtCore.QLineF(),QtGui.QPen(QtGui.QColor('#00aeef'),0))
-            self.anchor=None
+            self.bitmap=self.scene().addPixmap(image)
+            self.bitmap.setTransformOriginPoint(self.bitmap.boundingRect().center())
+            self.bitmap.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+            self.line=W.QGraphicsLineItem(self.bitmap)
+            self.line.setPen(QtGui.QPen(QtGui.QColor('#00aeef'),2))
+            pen=self.line.pen()
+            pen.setCosmetic(True)
+            self.line.setPen(pen)
+            self.points=()
+            self.setMouseTracking(True)
             self.enabled=False
+            self.pan=None
+            self.pan_button=None
+            self.space_pan=False
+            self.user_camera=False
+            self.setTransformationAnchor(W.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
         def point(self,event):
-            point=self.mapToScene(event.position().toPoint())
+            point=self.bitmap.mapFromScene(self.mapToScene(event.position().toPoint()))
             return QtCore.QPointF(min(max(0,point.x()),image.width()),
                                   min(max(0,point.y()),image.height()))
 
+        def frame_bitmap(self):
+            bounds=self.bitmap.sceneBoundingRect()
+            self.setSceneRect(bounds)
+            if not self.user_camera:self.fitInView(bounds,Qt.AspectRatioMode.KeepAspectRatio)
+
         def resizeEvent(self,event):
             super().resizeEvent(event)
-            self.fitInView(self.image_bounds,Qt.AspectRatioMode.KeepAspectRatio)
+            self.frame_bitmap()
+
+        def show_measurement(self,preview=None):
+            if len(self.points)==2:
+                self.line.setLine(QtCore.QLineF(*self.points))
+            elif self.points:
+                self.line.setLine(QtCore.QLineF(self.points[0],preview or self.points[0]))
+            self.line.setVisible(self.enabled and bool(self.points))
+
+        def wheelEvent(self,event):
+            factor=1.15**(event.angleDelta().y()/120)
+            current=self.transform().m11()
+            if .001<=current*factor<=100:
+                self.user_camera=True
+                self.scale(factor,factor)
+            event.accept()
+
+        def keyPressEvent(self,event):
+            if event.key()==Qt.Key.Key_Space:
+                self.space_pan=True
+                event.accept()
+                return
+            super().keyPressEvent(event)
+
+        def keyReleaseEvent(self,event):
+            if event.key()==Qt.Key.Key_Space:
+                self.space_pan=False
+                event.accept()
+                return
+            super().keyReleaseEvent(event)
 
         def mousePressEvent(self,event):
+            if (event.button() in (Qt.MouseButton.MiddleButton,Qt.MouseButton.RightButton)
+                    or self.space_pan and event.button()==Qt.MouseButton.LeftButton):
+                self.pan_button=event.button()
+                self.pan=event.position().toPoint()
+                self.user_camera=True
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                event.accept()
+                return
             if self.enabled and event.button()==Qt.MouseButton.LeftButton:
-                self.anchor=self.point(event)
-                self.line.setLine(QtCore.QLineF(self.anchor,self.anchor))
-                sync()
+                self.setFocus()
+                point=self.point(event)
+                if len(self.points)==1:
+                    if point==self.points[0]:return
+                    points=(*self.points,point)
+                else:
+                    points=(point,)
+                history.push(CalibrationChange(self.points,points,apply_points))
+                event.accept()
             else:super().mousePressEvent(event)
 
         def mouseMoveEvent(self,event):
-            if self.anchor is not None:
-                self.line.setLine(QtCore.QLineF(self.anchor,self.point(event)))
-                sync()
+            if self.pan is not None:
+                point=event.position().toPoint()
+                delta=point-self.pan
+                self.pan=point
+                for bar,amount in ((self.horizontalScrollBar(),delta.x()),
+                                   (self.verticalScrollBar(),delta.y())):
+                    bar.setValue(bar.value()-amount)
+                event.accept()
+                return
+            if self.enabled and len(self.points)==1:
+                self.show_measurement(self.point(event))
+                event.accept()
             else:super().mouseMoveEvent(event)
 
         def mouseReleaseEvent(self,event):
-            if self.anchor is not None and event.button()==Qt.MouseButton.LeftButton:
-                self.mouseMoveEvent(event)
-                self.anchor=None
-            else:super().mouseReleaseEvent(event)
+            if self.pan is not None and event.button()==self.pan_button:
+                self.pan=None
+                self.unsetCursor()
+                event.accept()
+                return
+            super().mouseReleaseEvent(event)
+
+    class CalibrationChange(QtGui.QUndoCommand):
+        def __init__(self,before,after,apply):
+            super().__init__()
+            self.before=before
+            self.after=after
+            self.apply=apply
+
+        def undo(self):
+            self.apply(self.before)
+
+        def redo(self):
+            self.apply(self.after)
 
     dialog=W.QDialog(parent)
+    history=QtGui.QUndoStack(dialog)
+    for key,action in (('Ctrl+Z',history.undo),('Ctrl+Y',history.redo)):
+        shortcut=QtGui.QShortcut(QtGui.QKeySequence(key),dialog)
+        shortcut.activated.connect(action)
     dialog.setWindowTitle('重设底图比例' if existing else '导入位图设置')
     dialog.resize(770,570)
     layout=W.QVBoxLayout(dialog)
     view=MeasureView();layout.addWidget(view,1)
     row=W.QFormLayout();layout.addLayout(row)
-    mode=W.QComboBox();mode.addItems(['按每像素的实际长度','在位图上拉出已知长度'])
+    mode=W.QComboBox();mode.addItems([tr('按每像素的实际长度'),tr('在位图上点击两点标定长度')])
     row.addRow('比例方式',mode)
     amount=W.QDoubleSpinBox();amount.setDecimals(8);amount.setRange(.00000001,100000000.)
     amount.setValue(existing or 1.)
     row.addRow('实际长度',amount)
-    unit=W.QComboBox();unit.addItems(list(UNITS));row.addRow('单位',unit)
+    unit=W.QComboBox()
+    for label,factor in UNITS.items():unit.addItem(tr(label),factor)
+    row.addRow('单位',unit)
+    angle=W.QDoubleSpinBox()
+    angle.setRange(-360.,360.)
+    angle.setDecimals(3)
+    angle.setSuffix(' °')
+    angle.setValue(rotation)
+    row.addRow(tr('旋转角度'),angle)
+    committed_angle=rotation
+
+    def preview_rotation(value):
+        view.bitmap.setRotation(-value)
+        view.frame_bitmap()
+
+    def apply_angle(value):
+        nonlocal committed_angle
+        committed_angle=value
+        angle.setValue(value)
+
+    def commit_angle():
+        if angle.value()!=committed_angle:
+            history.push(CalibrationChange(committed_angle,angle.value(),apply_angle))
+
+    angle.valueChanged.connect(preview_rotation)
+    angle.editingFinished.connect(commit_angle)
+    preview_rotation(angle.value())
     feedback=W.QLabel();layout.addWidget(feedback)
     buttons=W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Ok|W.QDialogButtonBox.StandardButton.Cancel)
     layout.addWidget(buttons)
     buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject)
 
+    def measured_length():
+        if not view.enabled:return 1.
+        return QtCore.QLineF(*view.points).length() if len(view.points)==2 else 0.
+
+    def apply_points(points):
+        view.points=points
+        sync()
+
     def sync(*_):
         view.enabled=mode.currentIndex()==1
         view.setCursor(Qt.CursorShape.CrossCursor if view.enabled else Qt.CursorShape.ArrowCursor)
-        view.line.setVisible(view.enabled)
-        length=view.line.line().length() if view.enabled else 1.
+        view.show_measurement()
+        length=measured_length()
         buttons.button(W.QDialogButtonBox.StandardButton.Ok).setEnabled(length>0)
-        text=f'比例 {amount.value()*UNITS[unit.currentText()]/length:.8g} 米/像素' if length else '在位图上按住鼠标左键拉出已知长度'
+        text=(tr('比例 {scale:.8g} 米/像素').format(scale=amount.value()*unit.currentData()/length)
+              if length else tr('在位图上点击终点。' if view.points else '在位图上点击起点。'))
         feedback.setText(text)
 
     mode.currentIndexChanged.connect(sync);amount.valueChanged.connect(sync);unit.currentIndexChanged.connect(sync)
     sync()
     if dialog.exec()!=W.QDialog.DialogCode.Accepted:return None
-    length=view.line.line().length() if view.enabled else 1.
-    return amount.value()*UNITS[unit.currentText()]/length
+    length=measured_length()
+    if not length:return None
+    return amount.value()*unit.currentData()/length,angle.value()
 
 def import_image(editor,filename=None):
     from PySide6.QtGui import QImageReader,QPixmap
     from PySide6.QtWidgets import QFileDialog,QMessageBox
-    if filename is None:filename,_=QFileDialog.getOpenFileName(editor.q,'导入位图','','位图 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)')
+    if filename is None:filename,_=QFileDialog.getOpenFileName(editor.q,tr('导入位图'),'',tr('位图 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)'))
     if not filename:return
     reader=QImageReader(filename);reader.setAutoTransform(True)
     size=reader.size()
     if not size.isValid() or size.width()*size.height()>MAX_PIXELS:
-        QMessageBox.warning(editor.q,'导入位图','无法识别该图片，或图片超过 2400 万像素。');return
+        QMessageBox.warning(editor.q,tr('导入位图'),tr('无法识别该图片，或图片超过 2400 万像素。'));return
     image=reader.read()
     if image.isNull():
-        QMessageBox.warning(editor.q,'导入位图',reader.errorString());return
-    scale=settings(editor.q,QPixmap.fromImage(image))
-    if scale is None:return
+        QMessageBox.warning(editor.q,tr('导入位图'),reader.errorString());return
+    calibration=settings(editor.q,QPixmap.fromImage(image))
+    if calibration is None:return
+    scale,rotation=calibration
     viewport=editor.canvas.q.viewport()
     center=editor.world(viewport.width()/2,viewport.height()/2)
-    try:oid=add(editor.scene,Path(filename).name,image,scale,center)
-    except ValueError as error:QMessageBox.warning(editor.q,'导入位图',str(error));return
+    try:oid=add(editor.scene,Path(filename).name,image,scale,center,rotation)
+    except ValueError as error:QMessageBox.warning(editor.q,tr('导入位图'),tr(str(error)));return
     editor.select_bitmap46(oid)
     editor.fit()
     editor.update_title()
@@ -241,8 +367,10 @@ def inspector(editor,oid):
     def rescale():
         current=layers(editor.scene).get(oid)
         if not current or current['locked']:return
-        scale=settings(editor.q,pixmap(current),current['scale'])
-        if scale is not None:change(scale=scale)
+        calibration=settings(editor.q,pixmap(current),current['scale'],current['rotation'])
+        if calibration is not None:
+            scale,rotation=calibration
+            change(scale=scale,rotation=rotation)
     resize.clicked.connect(rescale)
     layout.addWidget(resize,5,0,1,2)
     remove=QPushButton('删除底图',panel.q)
@@ -261,15 +389,15 @@ def manage(editor):
     from PySide6.QtWidgets import QInputDialog,QMessageBox
     records=layers(editor.scene)
     if not records:
-        QMessageBox.information(editor.q,'位图底图管理','当前工程没有位图底图。');return
-    choices={f'{index}. {row["name"]}'+('（已锁定）' if row['locked'] else ''):oid
+        QMessageBox.information(editor.q,tr('位图底图管理'),tr('当前工程没有位图底图。'));return
+    choices={f'{index}. {row["name"]}'+(tr('（已锁定）') if row['locked'] else ''):oid
              for index,(oid,row) in enumerate(records.items(),1)}
-    selected,ok=QInputDialog.getItem(editor.q,'位图底图管理','选择底图',list(choices),editable=False)
+    selected,ok=QInputDialog.getItem(editor.q,tr('位图底图管理'),tr('选择底图'),list(choices),editable=False)
     if not ok:return
     oid=choices[selected]
     row=records[oid]
     if row['locked']:
-        if QMessageBox.question(editor.q,'解锁底图','解锁这张位图底图？')!=QMessageBox.StandardButton.Yes:return
+        if QMessageBox.question(editor.q,tr('解锁底图'),tr('解锁这张位图底图？'))!=QMessageBox.StandardButton.Yes:return
         update(editor.scene,oid,locked=False)
         editor.update_title()
     editor.select_bitmap46(oid)

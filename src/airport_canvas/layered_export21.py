@@ -17,6 +17,8 @@ def layer_kind(row):
         return 'Chart furniture'
     if row.get('lamp_center'):
         return 'Lights'
+    if row.get('shoulder_base'):
+        return 'Shoulders'
     if row.get('draw_band')=='surface':
         return 'Pavement'
     if row['type']=='text':

@@ -1,7 +1,7 @@
 """Airport Canvas 21: Qt shell with unchanged airport editing controllers."""
 import sys
 from contextlib import contextmanager
-from interface_language import tr
+from interface_language import APPROACH_LEVELS, tr
 from pathlib import Path
 from qt_core21 import application
 from qt_theme21 import apply
@@ -10,12 +10,25 @@ from editor20_gui import Editor20
 from view_tools21_2 import ViewTools, rotate
 
 class AirportApp(Editor20):
+    def refresh(self,*args,**kwargs):
+        if self._stand_zone_style:
+            self.scene.data['meta'].setdefault('stand_zone_style',self._stand_zone_style)
+        return super().refresh(*args,**kwargs)
+
     def __init__(self,scene=None):
         from user_settings34 import path,read,migrate
         import interface_language
         self._preferences34=path()
         migrate(self._preferences34)
+        import json
         config=read(self._preferences34)
+        try:
+            styles=json.loads(config.get('display','stand_zone_style',fallback='{}'))
+            self._stand_zone_style=styles if isinstance(styles,dict) else {}
+        except ValueError:
+            self._stand_zone_style={}
+        try:self.preview_transparency=max(0,min(100,config.getint('display','preview_transparency',fallback=50)))
+        except ValueError:self.preview_transparency=50
         interface_language.language=config.get('interface','language',fallback='zh_CN')
         interface_language.install_catalog(application())
         try:self._theme_preference=config.getboolean('display','dark_mode24',fallback=None)
@@ -29,6 +42,8 @@ class AirportApp(Editor20):
         self.lighting_view = LightingView(self)
         from chart_view_f8 import ChartView
         self.chart_view = ChartView(self)
+        from node_preview import AltHover
+        self._node_hover=AltHover(self.canvas.q,self.preview_edge_node)
         from holding_point_boards import install as install_hp_boards
         install_hp_boards(self)
         from bitmap_layers46 import import_image,manage,install_drop_filter
@@ -42,9 +57,10 @@ class AirportApp(Editor20):
         edit_menu=next((act.menu() for act in self.q.menuBar().actions()
                         if act.text().replace('&','') in ('编辑',tr('编辑'))),None)
         if edit_menu:
-            edit_menu.addAction('PAPI…',self.configure_papi)
             from stand_row47 import StandRow
             edit_menu.addAction('批量绘制机位…',lambda:StandRow(self).start())
+            from stand_presets import open_presets, caption as preset_caption
+            edit_menu.addAction(preset_caption('机位预设方案…','Stand Presets…'),lambda:open_presets(self))
             from stand_names65 import show_stand_names
             edit_menu.addAction('机位命名…',lambda:show_stand_names(self))
         from palette_icons21 import install as install_palette_icons
@@ -52,7 +68,7 @@ class AirportApp(Editor20):
         if settings_menu:
             from qt_core21 import G,W
             from user_settings34 import save_language
-            menu=settings_menu.addMenu('语言 / Language')
+            menu=settings_menu.addMenu(tr('语言'))
             group=G.QActionGroup(menu)
             def choose_language(code):
                 try:save_language(self._preferences34,code)
@@ -133,6 +149,8 @@ class AirportApp(Editor20):
                     if 'AIRPORT CANVAS' in str(label.cget('text')):label.q.setStyleSheet('color:white;background:transparent;font-size:20px;font-weight:700;')
         from shortcuts21 import Shortcuts
         self.shortcuts21=Shortcuts(self)
+        self.bind('<Key-Shift_L>',lambda event:self.preview_stand_row_shift(True),add='+')
+        self.bind('<KeyRelease-Shift_L>',lambda event:self.preview_stand_row_shift(False),add='+')
         if settings_menu:settings_menu.addAction(tr('自定义快捷键…'),self.shortcuts21.dialog)
         if interface_language.language=='en':interface_language.install(self)
         self.shortcuts21.sync_captions()
@@ -241,7 +259,7 @@ class AirportApp(Editor20):
         if choice not in (toggle,opacity):return
         if choice==opacity:
             initial=bitmaps.get(oid,{}).get('opacity',styles.get(oid,{}).get('opacity',1.))
-            value,ok=QInputDialog.getInt(self.q,'对象透明度','透明度（%）',round(100*(1-initial)),0,100)
+            value,ok=QInputDialog.getInt(self.q,tr('对象透明度'),tr('透明度（%）'),round(100*(1-initial)),0,100)
             if not ok:return
         with self.scene.transaction('更新对象显示'):
             styles=self.scene.data['meta'].setdefault('object_display',{})
@@ -277,7 +295,7 @@ class AirportApp(Editor20):
         for label,key in (('作业区类型','work_zone'),('左侧作业区','work_zone_left'),
                           ('右侧作业区','work_zone_right'),('原廊桥侧作业区','work_zone_bridge_side')):
             fields[label]=key
-        options={'lead_type':list('ABCD'),
+        options={'lead_type':['A','B','C','D','ICAO'],
                  **{k:list(WORK_ZONES59) for k in ('work_zone','work_zone_left','work_zone_right')},
                  'work_zone_bridge_side':[*WORK_ZONES59,NO_WORK_ZONE]}
         first=values.get(primary,next(iter(values.values())))
@@ -291,19 +309,25 @@ class AirportApp(Editor20):
         if not labels:
             self.status.set('所选对象没有可批量修改的共同参数。')
             return
-        label,ok=QInputDialog.getItem(self.q,'批量修改同类参数','参数',labels,editable=False)
+        title=tr('批量修改同类参数')
+        translated_labels={tr(label):label for label in labels}
+        selected,ok=QInputDialog.getItem(self.q,title,tr('参数'),list(translated_labels),editable=False)
         if not ok:return
+        label=translated_labels[selected]
         key=fields[label]
         initial=first[key]
         if type(initial) is bool:
-            choice,ok=QInputDialog.getItem(self.q,'批量修改同类参数',label,['关闭','开启'],int(initial),False)
-            value=choice=='开启'
+            switches=[tr('关闭'),tr('开启')]
+            choice,ok=QInputDialog.getItem(self.q,title,tr(label),switches,int(initial),False)
+            value=choice==switches[1]
         elif key in options:
             allowed=options[key]
-            value,ok=QInputDialog.getItem(self.q,'批量修改同类参数',label,allowed,
-                                          allowed.index(initial) if initial in allowed else 0,False)
+            captions={tr(option):option for option in allowed}
+            choice,ok=QInputDialog.getItem(self.q,title,tr(label),list(captions),
+                                           allowed.index(initial) if initial in allowed else 0,False)
+            value=captions.get(choice)
         else:
-            value,ok=QInputDialog.getDouble(self.q,'批量修改同类参数',label+'（m）',initial,0,10000,3)
+            value,ok=QInputDialog.getDouble(self.q,title,tr(label)+tr('（m）'),initial,0,10000,3)
         if not ok:return
         try:
             with self.processing('正在批量更新参数'):
@@ -312,7 +336,7 @@ class AirportApp(Editor20):
                         if aid in self.scene.assets:self.scene.update_asset(aid,props={key:value})
                         else:self.scene.update_movement(aid,**{key:value})
                 self.refresh()
-            self.status.set(f'已更新 {len(ids)} 个对象的{label}。')
+            self.status.set(tr('已更新 {count} 个对象的{label}。').format(count=len(ids),label=tr(label)))
         except ValueError as exc:self.status.set(str(exc))
 
     def set_gpu49(self,enabled):
@@ -347,9 +371,9 @@ class AirportApp(Editor20):
 
     def edit_drawing_preset(self):
         from PySide6.QtWidgets import QInputDialog,QDialog,QDialogButtonBox,QFormLayout,QLineEdit,QCheckBox,QComboBox
-        modes={str(button.cget('text'))+' · '+key:key for key,button in self.tool_buttons.items()
+        modes={tr(str(button.cget('text')))+' · '+key:key for key,button in self.tool_buttons.items()
                if key not in ('SELECT','NODES','SPLIT7','TRUNCATE20_18','CONNECT','JUNCTION','BOX_SELECT','BREAK')}
-        label,ok=QInputDialog.getItem(self.q,'绘制工具预设','工具',sorted(modes),editable=False)
+        label,ok=QInputDialog.getItem(self.q,tr('绘制工具预设'),tr('工具'),sorted(modes),editable=False)
         if not ok:return
         key=modes[label]
         mode='STAND' if key in ('AUX_STAND19','HANGAR19','REMOTE_STAND') else key
@@ -361,12 +385,12 @@ class AirportApp(Editor20):
             values.update(has_bridge=False,work_zone_left=WORK_ZONES59[0],work_zone_right=WORK_ZONES59[0])
         elif key=='STAND':
             values.setdefault('work_zone_bridge_side',NO_WORK_ZONE)
-        choices={'lead_type':list('ABCD'),'route_type':list(SUBTYPES),
+        choices={'lead_type':['A','B','C','D','ICAO'],'route_type':list(SUBTYPES),
                  'axis_side':['A','B','BOTH'] if key.startswith('MARK:') and key[5:] in __import__('roads10').ROAD_MARKS else ['CENTER','A','B','BOTH'],
                  'deice_crossfall_mode':['SINGLE','SYMMETRIC'],
                  'flow':['BOTH','FORWARD','REVERSE'],'closure_kind':['TEMPORARY','PERMANENT'],
                  'code_letter':list('ABCDEF'),'code_number':['1','2','3','4'],
-                 'level_a':['v','0','1','2','3'],'level_b':['v','0','1','2','3'],
+                 'level_a':APPROACH_LEVELS,'level_b':APPROACH_LEVELS,
                  'enhanced_direction':['START','END'],'guidance':['GUIDED','UNGUIDED']}
         for field in ('work_zone','work_zone_left','work_zone_right','work_zone_bridge_side'):
             choices[field]=list(WORK_ZONES59)+( [NO_WORK_ZONE] if field=='work_zone_bridge_side' else [])
@@ -384,8 +408,13 @@ class AirportApp(Editor20):
                 control.setChecked(value)
             elif field in choices:
                 control=QComboBox()
-                control.addItems(choices[field])
-                control.setCurrentText(str(value))
+                options=choices[field]
+                if isinstance(options,dict):
+                    for code,caption in options.items():control.addItem(tr(caption),code)
+                    control.setCurrentIndex(max(0,control.findData(str(value))))
+                else:
+                    for option in options:control.addItem(tr(option),option)
+                    control.setCurrentIndex(max(0,control.findData(value)))
             else:
                 control=QLineEdit(str(value))
             form.addRow(field,control)
@@ -399,7 +428,7 @@ class AirportApp(Editor20):
                 if isinstance(control,QCheckBox):
                     parsed[field]=control.isChecked()
                 elif isinstance(control,QComboBox):
-                    parsed[field]=control.currentText()
+                    parsed[field]=control.currentData() or control.currentText()
                 else:
                     parsed[field]=type(values[field])(control.text().strip())
             self.drawing_presets[key]=parsed
@@ -552,10 +581,12 @@ class AirportApp(Editor20):
         super().destroy()
 
     def undo(self):
+        self._selected_edit_node=None
         with self.processing('正在撤销并重建机场图'):
             return super().undo()
 
     def redo(self):
+        self._selected_edit_node=None
         with self.processing('正在重做并重建机场图'):
             return super().redo()
 
@@ -602,6 +633,11 @@ class AirportApp(Editor20):
         self.redraw()
 
     def finish_draw(self):
+        row=self.__dict__.get('_stand_row')
+        if row:
+            if row.extent is not None and row.preview_event is not None:
+                return row.click(row.preview_event)
+            return 'break'
         chart=self.__dict__.get('chart_view')
         if chart and chart.active:return chart.finish()
         return super().finish_draw()
@@ -633,6 +669,7 @@ class AirportApp(Editor20):
         self.redraw()
 
     def select(self,oid):
+        if oid!=self.selection:self._selected_edit_node=None
         if self.__dict__.pop('_bitmap_selection46',None):
             self._selected_form=object()
         return super().select(oid)
@@ -643,7 +680,7 @@ class AirportApp(Editor20):
         self.selected_ids=set()
         self.select(None)
         self._stand_overlap_scene=self.scene
-        self._stand_overlap_pair=None
+        self._stand_overlap_pairs=set()
         self.redraw()
         self.update_inspector()
         self.status.set('点击高亮的机位相交区，在右侧选择处理方式。按 Esc 退出。')
@@ -664,7 +701,7 @@ class AirportApp(Editor20):
         self.canvas.delete('stand_overlap_regions')
         if not self.stand_overlap_active():return
         for key,shape in self.stand_overlap_regions().items():
-            selected=key==self._stand_overlap_pair
+            selected=key in self._stand_overlap_pairs
             color='#f4a832' if selected else '#28bddb'
             for area in polygons(shape):
                 coords=[v for q in area.exterior.coords for v in self.screen(q)]
@@ -672,31 +709,36 @@ class AirportApp(Editor20):
                                            outline=color,width=2,tags='stand_overlap_regions')
         self.canvas.tag_raise('stand_overlap_regions')
 
-    def set_stand_overlap_style(self,pair,merged):
-        if not self.stand_overlap_active() or pair not in self.stand_overlap_regions():return
+    def set_stand_overlap_style(self,selected,merged):
+        if not self.stand_overlap_active():return
+        selected=selected.intersection(self.stand_overlap_regions())
+        if not selected:return
         with self.scene.transaction('编辑机位相交区域'):
             pairs=self.scene.data['meta'].setdefault('merged_stand_overlaps',{})
-            if merged:pairs[pair]=True
-            else:pairs.pop(pair,None)
+            for pair in selected:
+                if merged:pairs[pair]=True
+                else:pairs.pop(pair,None)
         self.refresh()
 
     def stand_overlap_inspector(self):
         from qt_compat import ttk
         from property_rows import next_row
         panel=self.section('机位相交区域')
-        pair=self._stand_overlap_pair
-        if pair not in self.stand_overlap_regions():
-            message='在画布上选择一个高亮区域。' if self.stand_overlap_regions() else '当前没有相交的机位安全线区域。'
-            ttk.Label(panel,text=message,wraplength=235).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
+        regions=self.stand_overlap_regions()
+        selected=self._stand_overlap_pairs.intersection(regions)
+        if not selected:
+            message='点击区域选中，按住 Ctrl 可多选。' if regions else '当前没有相交的机位安全线区域。'
+            ttk.Label(panel,text=tr(message),wraplength=235).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
             return
-        names=' / '.join(self.scene.assets[aid]['name'] for aid in pair.split('|'))
-        ttk.Label(panel,text=names).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
-        import qt_compat as tk
-        selection=tk.StringVar(value='merge' if pair in self.scene.data['meta'].get('merged_stand_overlaps',{}) else 'hatch')
-        for value,label in (('hatch','斜线阴影'),('merge','合并机位')):
-            ttk.Radiobutton(panel,text=label,value=value,variable=selection,
-                            command=lambda mode=value:self.set_stand_overlap_style(pair,mode=='merge')).grid(
-                                row=next_row(panel),column=0,columnspan=2,sticky='w')
+        if len(selected)==1:
+            caption=' / '.join(self.scene.assets[aid]['name'] for aid in next(iter(selected)).split('|'))
+        else:
+            caption=tr('已选区域数')+'  '+str(len(selected))
+        ttk.Label(panel,text=caption).grid(row=next_row(panel),column=0,columnspan=2,sticky='w')
+        for merged,label in ((False,'应用斜线阴影'),(True,'应用机位合并')):
+            ttk.Button(panel,text=tr(label),
+                       command=lambda mode=merged:self.set_stand_overlap_style(selected,mode)).grid(
+                           row=next_row(panel),column=0,columnspan=2,sticky='ew')
 
     def update_inspector(self):
         super().update_inspector()
@@ -710,6 +752,19 @@ class AirportApp(Editor20):
                        command=lambda:self.batch_parameters(ids,self.selection)).grid(
                            row=next_row(panel),column=0,columnspan=2,sticky='ew')
             self.ensure_book15().tidy()
+        if len(ids)==1 and self.scene.assets.get(self.selection,{}).get('kind')=='RUNWAY':
+            props=self.scene.assets[self.selection]['props']
+            elevation=self.section('跑道端海拔')
+            for end in ('a','b'):
+                self.property_field(elevation,'elevation_'+end,
+                                    tr('跑道端海拔 (m，可空)')+' '+end.upper(),
+                                    props.get('elevation_'+end),'float')
+            self.property_field(elevation,'elevation_unit',tr('海拔标注单位'),
+                                props.get('elevation_unit','PROJECT'),'text',{'PROJECT':'跟随工程','m':'m','ft':'ft'})
+            from qt_compat import ttk
+            panel=self.section('PAPI')
+            ttk.Button(panel,text=tr('PAPI 灯设置…'),command=self.configure_papi).grid(
+                row=0,column=0,columnspan=2,sticky='ew')
         oid=self.__dict__.get('_bitmap_selection46')
         if not oid:return
         from bitmap_layers46 import inspector,layers
@@ -729,7 +784,86 @@ class AirportApp(Editor20):
             return None
         return hit
 
+    def delete_selected(self):
+        chart=self.__dict__.get('chart_view')
+        if chart and chart.active:return chart.delete_selected()
+        if self.mode=='NODES':
+            return self.delete_edit_node()
+        return super().delete_selected()
+
+    def delete_edit_node(self):
+        from curve_model import editable_vertices,rebuild_rounded
+        from polygon_edit20_7 import checked,building_collisions
+        target=self.__dict__.get('_selected_edit_node')
+        if not target or target[0] is not self.scene or target[1]!=self.selection:
+            self.status.set(tr('请先单击要删除的节点。'))
+            return 'break'
+        _,oid,kind,index,detail=target
+        asset=self.scene.assets.get(oid)
+        if not asset:return 'break'
+        try:
+            if kind=='lead':
+                from stand13 import part_nodes,save_nodes
+                nodes=part_nodes(asset,detail,self.scene)
+                if not 0<index<len(nodes)-1:
+                    raise ValueError(tr('该节点是必要的端点，不能删除。'))
+                save_nodes(self.scene,oid,detail,nodes[:index]+nodes[index+1:])
+            elif kind=='exit':
+                from stand15 import remote_exit_vertices,drawn_remote_exit_props
+                points=remote_exit_vertices(asset,self.scene)
+                if not isinstance(index,int) or not 0<index<len(points)-1:
+                    raise ValueError(tr('该节点是必要的端点，不能删除。'))
+                props=asset['props']
+                hit=(None,props['exit_asset'],props.get('exit_station',0)) if props.get('exit_asset') else None
+                self.scene.update_asset(oid,props=drawn_remote_exit_props(asset,points[:index]+points[index+1:],hit))
+            elif kind in ('polygon','path'):
+                points=list(asset['points'] if kind=='polygon' else editable_vertices(asset))
+                minimum=3 if kind=='polygon' else 2
+                if not 0<=index<len(points) or len(points)<=minimum:
+                    raise ValueError(tr('已达到此对象的最少节点数。'))
+                points.pop(index)
+                if kind=='polygon':
+                    checked(points)
+                    with self.scene.transaction('Delete polygon node'):
+                        asset['points']=points
+                        building_collisions(self.scene,{oid})
+                else:
+                    radii={str(int(k)-(int(k)>index)):v for k,v in asset['props'].get('corner_radii',{}).items()
+                           if int(k)!=index}
+                    rebuild_rounded(self.scene,oid,points,radii=radii)
+                    self.vertex_index=max(0,index-1)
+            else:
+                raise ValueError(tr('该节点是必要的端点，不能删除。'))
+        except ValueError as exc:
+            self.status.set(str(exc))
+            return 'break'
+        self._selected_edit_node=None
+        self.refresh()
+        return 'break'
+
     def click(self,event):
+        if self.mode!='NODES' or self._space11 or self.chart_view.active or self.lighting_view.active:
+            return self.click_canvas(event)
+        self._selected_edit_node=None
+        result=self.click_canvas(event)
+        for attr,kind in (('_polygon_drag20_7','polygon'),('_edit12','path'),('_vertex_drag','path'),
+                          ('_lead_drag13','lead'),('_remote_exit_drag','exit'),('runway_drag','fixed')):
+            drag=self.__dict__.get(attr)
+            if not drag:continue
+            if isinstance(drag,dict):
+                if kind=='path' and drag.get('kind','VERTEX')!='VERTEX':continue
+                oid,index=drag['aid'],drag['index']
+                detail=drag.get('key')
+            else:
+                oid,index=drag
+                detail=None
+            self._selected_edit_node=(self.scene,oid,kind,index,detail)
+            self._node_marker_position=(event.x,event.y)
+            self.redraw()
+            break
+        return result
+
+    def click_canvas(self,event):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active and not self._space11:return chart.click(event)
         lighting = self.__dict__.get('lighting_view')
@@ -739,7 +873,11 @@ class AirportApp(Editor20):
             from geometry11 import Point
             point=Point(self.world(event.x,event.y))
             hits=[(shape.area,key) for key,shape in self.stand_overlap_regions().items() if shape.covers(point)]
-            self._stand_overlap_pair=min(hits)[1] if hits else None
+            pair=min(hits)[1] if hits else None
+            if getattr(event,'state',0)&0x0004:
+                if pair:self._stand_overlap_pairs.symmetric_difference_update({pair})
+            else:
+                self._stand_overlap_pairs={pair} if pair else set()
             self.update_inspector()
             self.draw_stand_overlap_regions()
             return 'break'
@@ -821,7 +959,7 @@ class AirportApp(Editor20):
     def motion(self,event):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active and not (self._pan11 or self._space11):
-            return 'break'
+            return chart.drag_symbol(event)
         lighting = self.__dict__.get('lighting_view')
         if lighting and lighting.active and not self._pan11:
             return 'break'
@@ -857,7 +995,7 @@ class AirportApp(Editor20):
     def release(self,event):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active and not (self._pan11 or self._space11):
-            return 'break'
+            return chart.release_symbol(event)
         lighting = self.__dict__.get('lighting_view')
         if lighting and lighting.active and not self._pan11:
             return 'break'
@@ -903,6 +1041,23 @@ class AirportApp(Editor20):
         except ValueError as exc:
             self.status.set(str(exc))
 
+    def preview_edge_node(self,pixel):
+        tag='insert_node_preview'
+        self.canvas.delete(tag)
+        if pixel is None or self._space11 or self._pan11:return
+        try:
+            if self.chart_view.active:hit=self.chart_view.edge_node_target(pixel.x(),pixel.y())
+            elif self.mode=='NODES' and not self.lighting_view.active:
+                hit=self.edge_node_target(pixel.x(),pixel.y())
+            else:return
+        except (ValueError,KeyError):
+            return
+        if hit:
+            x,y=self.screen(hit[0])
+            self.canvas.create_oval(x-6,y-6,x+6,y+6,fill='#7af2ff',outline='#183a49',width=2,tags=tag)
+            self.canvas.create_line(x-3,y,x+3,y,fill='#183a49',width=1,tags=tag)
+            self.canvas.create_line(x,y-3,x,y+3,fill='#183a49',width=1,tags=tag)
+
     def pointer(self,event):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active and not (self._pan11 or self._space11):
@@ -938,6 +1093,7 @@ class AirportApp(Editor20):
     def cancel_action(self,event=None):
         chart=self.__dict__.get('chart_view')
         if chart and chart.active:
+            chart.cancel_symbol_drag()
             if chart.tool:chart.choose(None)
             else:
                 chart.selected=None
@@ -957,7 +1113,11 @@ class AirportApp(Editor20):
             return 'break'
         row=self.__dict__.get('_stand_row')
         if row:
-            row.stop()
+            if row.exit_rows is not None and getattr(event,'num',0)==3:
+                row.exit_rows=None
+                self.status.set(tr('移动鼠标设定整排引入方向，按住 Shift 垂直绘制，单击确认。'))
+                row.preview(event)
+            else:row.stop()
             return 'break'
         if self.__dict__.pop('runway_drag',None):
             self.canvas.delete('runway_drag')
@@ -981,13 +1141,16 @@ class AirportApp(Editor20):
         return super().cancel_action(event)
 
     def set_mode(self,mode):
+        self._selected_edit_node=None
         chart=self.__dict__.get('chart_view')
         if chart and chart.active:chart.leave(redraw=False)
         lighting = self.__dict__.get('lighting_view')
         if lighting and lighting.active:
             lighting.leave()
         self.__dict__.pop('_stand_overlap_scene',None)
-        if hasattr(self,'canvas'):self.canvas.delete('stand_overlap_regions')
+        if hasattr(self,'canvas'):
+            self.canvas.delete('stand_overlap_regions')
+            self.canvas.delete('insert_node_preview')
         self.cancel_bitmap_drag()
         row=self.__dict__.get('_stand_row')
         if row:row.stop()
@@ -1075,6 +1238,31 @@ class AirportApp(Editor20):
             self.draw_stand_overlap_regions()
             self.draw_compass23()
             self.canvas.tag_raise('view_mode18')
+            self.canvas.delete('selected_edit_node')
+            target=self.__dict__.get('_selected_edit_node')
+            if self.mode=='NODES' and target and target[:2]==(self.scene,self.selection):
+                _,oid,kind,index,_=target
+                asset=self.scene.assets.get(oid)
+                point=None
+                if asset and kind=='polygon' and index<len(asset['points']):point=asset['points'][index]
+                if asset and kind=='path':
+                    from curve_model import editable_vertices
+                    points=editable_vertices(asset)
+                    if index<len(points):point=points[index]
+                if point is not None:x,y=self.screen(point)
+                else:x,y=self._node_marker_position
+                self.canvas.create_oval(x-7,y-7,x+7,y+7,outline='#ff9300',width=2,tags='selected_edit_node')
+
+    def preview_stand_row_shift(self,perpendicular):
+        row=self.__dict__.get('_stand_row')
+        if row and row.preview_event is not None:
+            from types import SimpleNamespace
+            last=row.preview_event
+            row.preview(SimpleNamespace(x=last.x,y=last.y,state=(last.state&~1)|int(perpendicular)))
+
+    def toggle_layer_transparency(self):
+        enabled=getattr(self.canvas,'layer_opacity_preview',None) is None
+        self.canvas.set_layer_opacity_preview(1-self.preview_transparency/100 if enabled else None)
 
     def draw_compass23(self):
         import math
@@ -1099,7 +1287,12 @@ class AirportApp(Editor20):
             c.create_text(x,y+26,text=caption,fill=color,font=('Microsoft YaHei',8),tags='north23')
 
     def update_title(self):
-        super().update_title();self.q.setWindowTitle(self.q.windowTitle().replace('20.18','v1.0'))
+        super().update_title()
+        default_name='未命名机场'
+        if not self.filepath and self.scene.data['meta']['name']==default_name:
+            title=self.q.windowTitle()
+            if title.endswith(default_name):
+                self.q.setWindowTitle(title.removesuffix(default_name)+tr(default_name))
     def demo10(self):
         previous=self.scene
         super().open(Path(__file__).with_name('ZSQD.ACP'))
@@ -1111,7 +1304,7 @@ class AirportApp(Editor20):
         from qt_core21 import W
         runway=self.scene.assets.get(self.selection,{})
         if runway.get('kind')!='RUNWAY':
-            self.status.set(tr('请先选择跑道'))
+            W.QMessageBox.information(self.q, tr('PAPI 灯设置…'), tr('请先选择跑道'))
             return
         dialog=W.QDialog(self.q)
         dialog.setWindowTitle('PAPI')

@@ -39,13 +39,13 @@ def structure(key):
         line([(8,30),(27,30),(52,10),(65,10)],YELLOW,2)
         line([(28,30),(43,30),(58,35)],PAVE,11)
         line([(28,30),(43,30),(58,35)],YELLOW,2)
-    elif key in ('STAND','REMOTE_STAND','AUX_STAND19','HANGAR19'):
+    elif key in ('STAND','REMOTE_STAND','GA_STAND','AUX_STAND19','HANGAR19'):
         line([(16,5),(16,32),(56,32),(56,5)],INK,2)
         line([(36,36),(36,9)],YELLOW if key!='AUX_STAND19' else '#8c9dab')
         line([(28,14),(44,14)],INK)
         if key=='STAND':
             line([(59,8),(53,8),(46,15)],INK,5)
-        elif key=='REMOTE_STAND':
+        elif key in ('REMOTE_STAND','GA_STAND'):
             line([(30,34),(36,28),(42,34)],INK,2)
         elif key=='HANGAR19':
             line([(14,13),(36,3),(58,13)],INK,4)
@@ -107,7 +107,7 @@ def structure(key):
         else:
             d.rectangle((24,12,47,30),outline=INK,width=2)
             line([(24,17),(47,17)])
-    elif key in ('MARK:LEAD_IN','MARK:LEAD_OUT','MARK:ALIGNMENT','MARK:AUX_LEAD',
+    elif key in ('MARK:LEAD_IN','MARK:LEAD_OUT','MARK:ALIGNMENT','MARK:AUX_LEAD','MARK:ICAO_AUX_LEAD',
                  'MARK:ROAD_EDGE','MARK:ROAD_DIVIDER','MARK:TWY_CENTER','MARK:RWY_EDGE'):
         field([(5,8),(67,8),(67,32),(5,32)])
         if key in ('MARK:ROAD_EDGE','MARK:RWY_EDGE'):
@@ -116,7 +116,7 @@ def structure(key):
             if key=='MARK:RWY_EDGE':
                 for x in (13,30,47):
                     line([(x,20),(x+7,20)],WHITE,2)
-        elif key in ('MARK:AUX_LEAD','MARK:ROAD_DIVIDER'):
+        elif key in ('MARK:AUX_LEAD','MARK:ICAO_AUX_LEAD','MARK:ROAD_DIVIDER'):
             for x in (12,26,40,54):
                 line([(x,20),(x+6,20)],WHITE if key=='MARK:ROAD_DIVIDER' else YELLOW,2)
         else:

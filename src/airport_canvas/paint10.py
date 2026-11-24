@@ -5,7 +5,7 @@ from marking_catalog import BLACK
 
 WAIT={'HOLD_A','HOLD_B','INTERMEDIATE','INTERMEDIATE_POINT'}
 STAND_INK={'LEAD_IN','LEAD_IN_A','LEAD_IN_B','LEAD_IN_C','LEAD_IN_D','LEAD_OUT',
-           'AUX_LEAD','STAND_STOP','STAND_NUMBER','UNGUIDED_STOP','ALIGNMENT','TURN_START'}
+           'AUX_LEAD','ICAO_AUX_LEAD','STAND_STOP','STAND_NUMBER','UNGUIDED_STOP','ALIGNMENT','TURN_START'}
 
 def plate(item,margin=.1):
     q=item['points'][0];angle=math.radians(item.get('rotation',0));u=[math.cos(angle),math.sin(angle)];v=[-u[1],u[0]]
@@ -20,7 +20,7 @@ def outline_group(scene,oid,mark=None):
     root=owner.split(':')[0]
     owner_kind=scene.assets.get(owner,scene.assets.get(root,{})).get('kind')
     if kind in STAND_INK:return 'stand'
-    if kind in ('STAND_SAFETY','SAFETY_OVERLAP','BRIDGE_COMPOSITE','HYDRANT','PIT','SAFETY') or owner_kind=='STAND' or props.get('building_role19')=='BRIDGE':
+    if kind in ('HELI_SAFETY','STAND_SAFETY','SAFETY_OVERLAP','BRIDGE_COMPOSITE','HYDRANT','PIT','SAFETY') or owner_kind=='STAND' or props.get('building_role19')=='BRIDGE':
         return 'safety'
     if owner_kind=='RUNWAY' or kind.startswith('RWY_') or kind in ('THRESHOLD_BAR','THRESHOLD_HEADS','DISPLACED_ARROW','CLOSED_RWY','AIMING_POINT','TDZ_BASIC','TDZ_CODED','PRETHRESHOLD'):
         return 'runway'
@@ -130,7 +130,7 @@ def style(scene,items,generated=None):
                 for polygon in polygons(unary_union(strips)):
                     under.append(dict(type='polygon',oid=oid,points=[list(q) for q in polygon.exterior.coords][:-1],fill='#101010',black_underlay=True,enhanced_backing11=True))
                 enhanced_done.add(oid)
-        elif (item.get('stroke')=='#cf383e' or item.get('fill')=='#cf383e') and group!='stand' and (kind in ('STAND_SAFETY','SAFETY_OVERLAP','BRIDGE_COMPOSITE','HYDRANT','PIT','SAFETY') or generated.get(oid,{}).get('owner') in scene.assets and scene.assets[generated[oid]['owner']]['kind']=='STAND'):
+        elif (kind=='HELI_SAFETY' or item.get('stroke')=='#cf383e' or item.get('fill')=='#cf383e') and group!='stand' and (kind in ('HELI_SAFETY','STAND_SAFETY','SAFETY_OVERLAP','BRIDGE_COMPOSITE','HYDRANT','PIT','SAFETY') or generated.get(oid,{}).get('owner') in scene.assets and scene.assets[generated[oid]['owner']]['kind']=='STAND'):
             if p.get('white_outline',policy.get('safety',not meta.get('hide_safety_outline21_2'))):
                 under.append(dict(item,fill=None,stroke='#ffffff',width=(item.get('width',.1) if item.get('stroke') else 0)+.1,black_underlay=True,white_red_outline11=True))
         elif outlined and kind in WAIT:

@@ -67,7 +67,7 @@ class Editor10(Editor9):
         ttk.Button(toolbar,text='平行跑道编号',command=self.parallel10).pack(side='left',padx=3)
         ttk.Checkbutton(toolbar,text='连接预览',variable=self.preview_enabled).pack(side='left',padx=8)
         menu=self.nametowidget(self.cget('menu'));settings=tk.Menu(menu,tearoff=False);menu.add_cascade(label='设置',menu=settings)
-        settings.add_command(label='项目首选项…',command=self.preferences10);settings.add_command(label='坐标与磁偏角…',command=self.project_settings)
+        settings.add_command(label='项目首选项…',command=self.preferences10)
         settings.add_command(label='新建道面组',command=self.add_group);settings.add_command(label='移至根层',command=lambda:self.move_into(None));settings.add_command(label='示例工程：ZSQD',command=self.demo10)
         self.after_idle(lambda:body.sashpos(0,200))
     def operation_icon10(self,i):

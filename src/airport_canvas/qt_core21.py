@@ -63,6 +63,20 @@ class EventHub(C.QObject):
                 page=page.parentWidget()
         ref=getattr(obj,'_ac_wrapper',None);widget=ref() if ref else None
         if widget is None or widget._destroyed:return False
+        if (event.type() in (C.QEvent.Type.ShortcutOverride,C.QEvent.Type.KeyPress,C.QEvent.Type.KeyRelease)
+                and event.key()==Qt.Key.Key_Space):
+            # The inspector is embedded in a graphics proxy, so its view receives keys first.
+            target=obj
+            if isinstance(obj,W.QGraphicsView) or isinstance(getattr(widget,'q',None),W.QGraphicsView):
+                scene=widget.q.scene()
+                proxy=scene.focusItem() if scene else None
+                if isinstance(proxy,W.QGraphicsProxyWidget) and proxy.widget() is not None:
+                    target=proxy.widget().focusWidget()
+            if isinstance(target,(W.QLineEdit,W.QTextEdit,W.QPlainTextEdit,W.QAbstractSpinBox)):
+                if event.type()==C.QEvent.Type.ShortcutOverride:
+                    event.accept()
+                    return True
+                return False
         layout=getattr(widget,'viewport_layout11',None)
         if layout and obj is widget.q.viewport() and event.type() in (C.QEvent.Type.Show,C.QEvent.Type.Resize):
             C.QTimer.singleShot(0,layout)
@@ -217,11 +231,13 @@ class Widget:
         def update(value):
             if self._destroyed:return
             blocker=C.QSignalBlocker(self.q)
-            if isinstance(self.q,W.QComboBox):self.set(value)
+            if isinstance(self.q,W.QComboBox):
+                if self.get()!=str(value):self.set(value)
             elif isinstance(self.q,W.QAbstractButton) and self.q.isCheckable():self.q.setChecked(value==self._options.get('value',True))
             elif hasattr(self.q,'setText'):
                 from interface_language import tr
-                self.q.setText(tr(str(value)) if isinstance(self.q,W.QLabel) else str(value))
+                text=tr(str(value)) if isinstance(self.q,W.QLabel) else str(value)
+                if self.q.text()!=text:self.q.setText(text)
         variable._listeners.append(update);self._trace_links.append((variable,update));update(variable.get())
         if isinstance(self.q,W.QLineEdit):self.q.textChanged.connect(variable.set)
         elif isinstance(self.q,W.QComboBox):self.q.currentTextChanged.connect(lambda *_:variable.set(self.get()))
@@ -468,9 +484,11 @@ class Combobox(Widget):
                 if 'values' in kw:
                     self.q.clear()
                     from interface_language import tr
-                    for value in kw['values']:
+                    values=kw['values']
+                    for value in values:
                         raw=str(value)
-                        caption=raw if self.q.isEditable() else tr(raw,enum=True)
+                        label=values[value] if isinstance(values,dict) else raw
+                        caption=raw if self.q.isEditable() else tr(label,enum=True)
                         self.q.addItem(caption,raw)
                 self.set(desired)
         super().configure(**kw)

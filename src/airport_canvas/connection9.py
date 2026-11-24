@@ -80,10 +80,33 @@ def existing_plan(scene,first,second,controls=None,radius=25):
         return dict(points=path,controls=safe_controls(path[0],path[-1],tangent,end),directions=[1 if sa>=first['station'] else -1,1 if second['station']>=sb else -1])
     _,u=g.at(left,L);_,v=g.at(right,0);angle=math.acos(max(-1,min(1,dot(u,v))))
     if angle<1e-5:return dict(points=left+right[1:],controls=safe_controls(left[0],right[-1],g.unit(left[0],left[1]),g.unit(right[-2],right[-1])),directions=[1 if sa>first['station'] else -1,1 if second['station']>sb else -1])
-    d=min(radius*math.tan(angle/2),L*.49,R*.49);r=d/max(1e-6,math.tan(angle/2));h=4/3*r*math.tan(angle/4)
-    start,us=g.at(left,L-d);end,vs=g.at(right,d);c=controls or [[start[k]+us[k]*h for k in (0,1)],[end[k]-vs[k]*h for k in (0,1)]]
-    middle=path_with_controls(start,end,c);path=g.subpath(left,0,L-d)[:-1]+middle+g.subpath(right,d,R)[1:]
-    return dict(points=path,controls=c,directions=[1 if sa>first['station'] else -1,1 if second['station']>sb else -1])
+    from pavement_geometry import junction_arm
+    from shapely.geometry import LineString
+
+    _,left_reach=junction_arm(left,L,-1)
+    _,right_reach=junction_arm(right,0,1)
+    tangent_factor=math.tan(angle/2)
+    reach=min(radius*tangent_factor,L*.49,R*.49,left_reach*.98,right_reach*.98)
+    for scale in (1.,.5,.25,.125):
+        d=reach*scale
+        if d<.001:break
+        start,us=g.at(left,L-d)
+        end,vs=g.at(right,d)
+        if g.distance(start,end)<.001:continue
+        h=4/3*(d/tangent_factor)*math.tan(angle/4)
+        automatic=[[start[k]+us[k]*h for k in (0,1)],[end[k]-vs[k]*h for k in (0,1)]]
+        options=(controls,automatic) if controls and scale==1. else (automatic,)
+        for c in options:
+            middle=path_with_controls(start,end,c)
+            path=g.subpath(left,0,L-d)[:-1]+middle+g.subpath(right,d,R)[1:]
+            if LineString(path).is_simple:
+                return dict(points=path,controls=c,directions=[1 if sa>first['station'] else -1,1 if second['station']>sb else -1])
+    # Even with too little room for a fillet, an intersecting pair can
+    # still carry guidance through its shared node.
+    path=left+right[1:]
+    if LineString(path).is_simple:
+        return dict(points=path,controls=safe_controls(path[0],path[-1],u,v),
+                    directions=[1 if sa>first['station'] else -1,1 if second['station']>sb else -1])
 
 def needs_pavement(scene,first,second):
     """Existing intersecting parents need a painted movement, not another road."""
@@ -136,6 +159,11 @@ def runway_extension(scene,points,runway,index=0,direction_hint=None,preserve_ex
                 pts=pts[:i+1]+[edge]+pts[i+1:]
             else:taper=min(taper,travelled)
             break
+        taper=min(taper,g.length(pts))
+        if taper>1e-7:
+            head=g.subpath(pts,0,taper)
+            tail=g.subpath(pts,taper,g.length(pts))
+            pts=head+tail[1:]
     gap=runway_center_width(scene,runway)/2+.9+.075;walk=0;paint=[]
     for i,q in enumerate(pts):
         if i:walk+=g.distance(pts[i-1],q)
@@ -146,11 +174,13 @@ def runway_extension(scene,points,runway,index=0,direction_hint=None,preserve_ex
         if (not preserve_exterior or weight>0) and abs(dot([shifted[k]-start[k] for k in (0,1)],normal))<=runway['props']['width']/2:
             shifted=[shifted[k]+axis[k]*(max(0,min(length,s))-s) for k in (0,1)]
         if not paint or g.distance(paint[-1],shifted)>1e-8:paint.append(shifted)
+        if preserve_exterior and i==0 and taper<=1e-7 and g.distance(shifted,q)>1e-8:
+            paint.append(q)
     # Use the painted attachment station, which may differ from an
     # imported or edited endpoint outside the physical runway.
     lead_station=dot([paint[0][k]-start[k] for k in (0,1)],axis)
     available=lead_station if travel>0 else length-lead_station
-    extension=min(needed,max(0,available-(.075 if keep_direction else 0)))
+    extension=min(needed,max(0,available-.075))
     if extension>1e-7:
         # For a diagonal arrival, round the lead-to-connector corner within
         # the runway instead of leaving a hard angle at the centerline.
@@ -173,4 +203,12 @@ def runway_extension(scene,points,runway,index=0,direction_hint=None,preserve_ex
               +normal[k]*dot([paint[0][j]-start[j] for j in (0,1)],normal)
               for k in (0,1)]
         paint.insert(0,lead)
+    from shapely.geometry import LineString
+    if len(paint)>1 and not LineString(paint).is_simple:
+        # Avoid adding a return loop when the incoming guide already doubles
+        # back close to the runway axis.
+        if extension>1e-7 and len(paint)>2 and LineString(paint[1:]).is_simple:
+            paint=paint[1:]
+        elif len(pts)>1 and LineString(pts).is_simple:
+            paint=pts
     return list(reversed(paint)) if reverse else paint

@@ -56,3 +56,21 @@ def hover(app,e):
     cursor=next((cursor for x,y,cursor in reversed(points) if math.hypot(e.x-x,e.y-y)<=10),None)
     if cursor:app.canvas.configure(cursor=cursor);d['_node_cursor20_8']=True
     elif d.pop('_node_cursor20_8',False) or d.get('mode')=='NODES':app.canvas.configure(cursor='')
+
+
+def edge_insertion(points,point,tolerance,closed=False):
+    """Return the nearest interior projection on an editable edge."""
+    from math import dist
+    edges=zip(points,points[1:]+(points[:1] if closed else []))
+    candidates=[]
+    for index,(a,b) in enumerate(edges,1):
+        dx,dy=b[0]-a[0],b[1]-a[1]
+        length2=dx*dx+dy*dy
+        if not length2:continue
+        t=((point[0]-a[0])*dx+(point[1]-a[1])*dy)/length2
+        if not 1e-6<t<1-1e-6:continue
+        q=[a[0]+t*dx,a[1]+t*dy]
+        candidates.append((dist(point,q),index,q))
+    if candidates:
+        distance,index,q=min(candidates)
+        if distance<=tolerance:return index,q

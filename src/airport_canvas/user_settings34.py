@@ -63,6 +63,7 @@ def save(app,filename):
     config['display'].setdefault('dark_mode24',str(bool(meta.get('dark_mode24'))))
     config['display'].update(grid_visible=str(bool(app.grid_visible.get())),
                              nav_visible=str(bool(app.nav_visible11.get())))
+    if hasattr(app,'preview_transparency'):config['display']['preview_transparency']=str(app.preview_transparency)
     if hasattr(app,'gpu_requested'):config['display']['gpu_viewport']=str(app.gpu_requested)
     config['display'].pop('nav_position',None)
     if meta.get('nav_position') is not None:
@@ -78,6 +79,21 @@ def save(app,filename):
     config['window'].update(width=str(normal.width()),height=str(normal.height()),
                             maximized=str(app.q.isMaximized()))
     write(config,filename)
+
+def batch_stand_preferences(filename):
+    try:
+        value=json.loads(read(filename).get('editing','batch_stands',fallback='{}'))
+    except ValueError:
+        return {}
+    return value if isinstance(value,dict) else {}
+
+
+def save_batch_stand_preferences(filename,values):
+    config=read(filename)
+    if 'editing' not in config:config.add_section('editing')
+    config['editing']['batch_stands']=json.dumps(values,ensure_ascii=False)
+    write(config,filename)
+
 
 def recent_projects(filename):
     config=read(filename)

@@ -1,5 +1,7 @@
 """Responsive scene editor: retained vectors, debounced forms, dependency jobs."""
 import copy
+import json
+from pathlib import Path
 from contextlib import contextmanager
 import math
 import time
@@ -43,16 +45,20 @@ def live_demo():
 def build_frame(data,options):
     scene=AirportScene(data)
     start=time.perf_counter()
-    generated=generated_markings(scene)
-    items=display_list(scene,*options,generated=generated)
+    stand_designs={}
+    generated=generated_markings(scene,stand_designs=stand_designs)
+    items=display_list(scene,*options,generated=generated,stand_designs=stand_designs)
     return items,generated,crossings(scene),(time.perf_counter()-start)*1000
 
 def build_audit(data):return validate_scene(AirportScene(data))
 
 
+_RELEASE_TITLE=json.loads(Path(__file__).with_name('VERSION.json').read_text(encoding='utf-8'))['release']
+
+
 class LiveEditor(EditorApp):
     def update_title(self):
-        super().update_title();self.title(self.title().replace('Airport Canvas —','Airport Canvas 4.0 —'))
+        super().update_title();self.title(self.title().replace('Airport Canvas',_RELEASE_TITLE,1))
     def __init__(self,scene=None):
         self._property_after=None;self._render_after=None;self._audit_after=None;self._poll_after=None
         self._zoom_after=None
@@ -229,8 +235,9 @@ class LiveEditor(EditorApp):
 
     def rebuild_scene(self):
         self._frame_key=None;self.highlight_tool()
-        self.auto_assets=generated_markings(self.scene)
-        self.render_items=display_list(self.scene,*self.options(),generated=self.auto_assets)
+        stand_designs={}
+        self.auto_assets=generated_markings(self.scene,stand_designs=stand_designs)
+        self.render_items=display_list(self.scene,*self.options(),generated=self.auto_assets,stand_designs=stand_designs)
         self._junctions=crossings(self.scene)
         self._rendered_scene50=self.scene
         self.sync_tree();self.update_inspector();self.redraw();self.update_title();self.schedule_audit()
@@ -267,7 +274,9 @@ class LiveEditor(EditorApp):
         self._audit_after=self.after(700,self.run_audit)
     def run_audit(self):
         self._audit_after=None
-        if self.drag or self._audit_future is not None or self._future is not None or self._pending_frame:
+        gesture=getattr(self,'gesture11',None)
+        if (self.drag or (gesture and gesture()) or self._audit_future is not None
+                or self._future is not None or self._pending_frame):
             self.schedule_audit();return
         self._audit_key=(id(self.scene),self.scene.revision)
         self.show_processing('audit','正在审查机场工程')

@@ -13,6 +13,21 @@ class PathIndex:
         a,b=self.points[i:i+2];u=unit(a,b);d=station-self.stations[i]
         return [a[0]+u[0]*d,a[1]+u[1]*d],u
 
+    def subpath(self,start,end):
+        if start>end:
+            return list(reversed(self.subpath(end,start)))
+        first,_=self.at(start)
+        last,_=self.at(end)
+        result=[first]
+        begin=bisect.bisect_right(self.stations,start,1)
+        stop=bisect.bisect_left(self.stations,end-1e-8,begin)
+        for point in self.points[begin:stop]:
+            if distance(result[-1],point)>1e-8:
+                result.append(list(point))
+        if distance(result[-1],last)>1e-8 or len(result)==1:
+            result.append(last)
+        return result
+
 def simplify(points,tolerance=.004):
     if len(points)<3:return points
     a,b=points[0],points[-1];u=unit(a,b);best=0;index=0

@@ -144,25 +144,45 @@ def validate_scene(scene):
     # A geometric crossing remains disconnected; make this visible rather than silently joining.
     paths=[a for a in scene.assets.values() if a['kind'] in ('RUNWAY','TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE','ROAD')]
     linked={frozenset((m['from']['asset'],m['to']['asset'])) for m in scene.movements.values()}
+    from shapely import STRtree, box
+    segments=[]
+    envelopes=[]
+    for asset in paths:
+        axis=list(zip(asset['points'],asset['points'][1:]))
+        segments.append(axis)
+        bounds=[]
+        for a,b in axis:
+            # Match the endpoint tolerance in scene_geometry.crossing.
+            dx=abs(b[0]-a[0])*1e-9+1e-8
+            dy=abs(b[1]-a[1])*1e-9+1e-8
+            bounds.append(box(min(a[0],b[0])-dx,min(a[1],b[1])-dy,
+                              max(a[0],b[0])+dx,max(a[1],b[1])+dy))
+        envelopes.append(bounds)
+    trees=[STRtree(bounds) for bounds in envelopes]
     for i,a in enumerate(paths):
-        for b in paths[i+1:]:
-            hit=any(g.crossing(x,y,u,v) for x,y in zip(a['points'],a['points'][1:]) for u,v in zip(b['points'],b['points'][1:]))
-            if hit and frozenset((a['id'],b['id'])) not in linked:
+        for j in range(i+1,len(paths)):
+            b=paths[j]
+            if frozenset((a['id'],b['id'])) in linked:
+                continue
+            left,right=trees[j].query(envelopes[i])
+            if any(g.crossing(*segments[i][k],*segments[j][l]) for k,l in zip(left,right)):
                 message=f'与 {b["name"]} 仅几何相交，尚无允许操纵；需明确连接或保留仅交叉。'
                 if (a['kind']=='ROAD')!=(b['kind']=='ROAD'):message=f'与 {b["name"]} 存在航空器/车辆交叉，需独立道路等待及控制方案。'
                 issue(a['id'],'REVIEW_REQUIRED','UNCONNECTED_CROSSING',message,'显式连接/道路控制约束')
+    from automatic_markings import generated_markings
     from marking_standards import marking_checks
-    issues.extend(marking_checks(scene))
     from audit9 import checks
-    issues.extend(checks(scene))
+    generated=generated_markings(scene)
+    issues.extend(marking_checks(scene,generated))
+    issues.extend(checks(scene,generated))
     from deice11 import checks as deice_checks
     issues.extend(deice_checks(scene))
     issues.extend(__import__('rules13').checks(scene))
     issues.extend(__import__('terminal19').checks(scene))
-    issues.extend(__import__('styles19').checks(scene))
+    issues.extend(__import__('styles19').checks(scene,generated))
     issues.extend(__import__('model20').checks(scene))
-    issues.extend(__import__('connection20_2').checks(scene))
-    issues.extend(__import__('runway20').checks(scene))
+    issues.extend(__import__('connection20_2').checks(scene,generated))
+    issues.extend(__import__('runway20').checks(scene,generated))
     return dict(status='NOT_CERTIFIED',scenario=scene.scenario.copy(),issues=issues,
                 coverage=coverage_summary(),summary={state:sum(x['status']==state for x in issues) for state in ('PASS','FAIL','UNKNOWN','UNVERIFIED','NOT_APPLICABLE','REVIEW_REQUIRED')})
 

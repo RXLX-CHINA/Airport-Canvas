@@ -8,7 +8,7 @@ from curve_model import node,evaluate
 CROSS_POINTS={'HOLD_A','HOLD_B','INTERMEDIATE_POINT','RWY_THRESHOLD','THRESHOLD_HEADS','RWY_CIRCLE'}
 CROSS_PATHS={'INTERMEDIATE','THRESHOLD_BAR'}
 PATH_SNAPS={'RUNWAY','TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE'}
-GUIDE_KEYS={'TWY_CENTER','TWY_ENHANCED','TURN_PAD_GUIDE','LEAD_IN','LEAD_OUT','AUX_LEAD','ALIGNMENT','PUSHBACK'}
+GUIDE_KEYS={'TWY_CENTER','TWY_ENHANCED','TURN_PAD_GUIDE','LEAD_IN','LEAD_OUT','AUX_LEAD','ICAO_AUX_LEAD','ALIGNMENT','PUSHBACK'}
 AXIS_MARKS=CROSS_POINTS|CROSS_PATHS|GUIDE_KEYS|{'RWY_NUMBER','RWY_CENTER','RWY_EDGE','LOCATION','DIRECTION','MAX_SPAN','MANDATORY','NO_ENTRY','HP','PRETHRESHOLD','AIMING_POINT','TDZ_BASIC','TDZ_CODED','CLOSED_RWY','CLOSED_TWY','VOR','VOR_DIRECTION','DISPLACED_ARROW','TURN_PAD_GUIDE','TWY_EDGE','ROAD_STOP'}
 
 def snap_path(scene,p,tolerance=15,exclude=None):
@@ -93,7 +93,7 @@ def _legacy_move_anchor(scene,mid,branch,index,p):
             port['station']=station
             if m.get('follow_existing'):
                 from connection9 import existing_plan
-                plan=existing_plan(scene,m['from'],m['to'])
+                plan=existing_plan(scene,m['from'],m['to'],radius=m.get('join_radius',25))
                 if plan:m['bezier_controls']=plan['controls']
                 else:raise ValueError('移动后的连接不符合现有中线流向')
                 return

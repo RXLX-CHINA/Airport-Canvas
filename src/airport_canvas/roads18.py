@@ -1,5 +1,5 @@
 """Checker transition covers the protected crossing, not only the pavement width."""
-def checker_mask(scene):
+def checker_mask(scene,stand_designs=None):
     from geometry11 import aircraft_routes,LineString,unary_union
     from roads17 import TAXI_DISTANCE,STAND_DISTANCE
     extension=max(0.,scene.data['meta'].get('road_checker_extension18',3.))
@@ -19,7 +19,9 @@ def checker_mask(scene):
     for stand in scene.assets.values():
         p=stand['props']
         if stand['kind']=='STAND' and not p.get('closed') and p.get('auto_markings',True):
-            lead=design(stand,scene)
+            lead=(stand_designs or {}).get(stand['id'])
+            if lead is None:
+                lead=design(stand,scene)
             paths=lead.get('full_paths15') or lead['paths']
         elif stand['kind']=='MARKING' and p.get('mark_type') in (
                 'LEAD_IN','LEAD_IN_A','LEAD_IN_B','LEAD_IN_C','LEAD_IN_D'):

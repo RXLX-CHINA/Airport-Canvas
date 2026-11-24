@@ -1,4 +1,6 @@
 """PAPI plan symbols and illustrative on-slope light indications."""
+import math
+
 import scene_geometry as g
 
 
@@ -22,7 +24,20 @@ def rows(scene):
 
 
 def plan_items(scene):
-    for runway,_,lamps,_ in rows(scene):
+    for runway,_,lamps,approach in rows(scene):
+        first,last=lamps[0],lamps[-1]
+        length=g.length((first,last))
+        along=tuple((b-a)/length for a,b in zip(first,last))
+        radius=1.5
+        corners=((length,1,0),(0,1,90),(0,-1,180),(length,-1,270))
+        outline=[]
+        for x,y,angle in corners:
+            for step in range(7):
+                theta=math.radians(angle+15*step)
+                u=x+radius*math.cos(theta)
+                v=y+radius*math.sin(theta)
+                outline.append(tuple(first[k]+u*along[k]+v*approach[k] for k in (0,1)))
+        yield dict(type='polygon',oid=runway['id'],points=outline,fill='#85898d')
         for x,y in lamps:
             yield dict(type='polygon',oid=runway['id'],points=[(x-1,y-1),(x+1,y-1),(x+1,y+1),(x-1,y+1)],
                        fill='#e85750',stroke='#ffffff',width=.2)

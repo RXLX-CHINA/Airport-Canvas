@@ -40,7 +40,7 @@ def interrupt(scene,items,generated):
             mask_cache[half]=(shapes,STRtree(shapes))
         shapes,tree=mask_cache[half]
         return [(masks[int(i)][0],shapes[int(i)]) for i in tree.query(line,predicate='intersects')]
-    guides={'LEAD_IN','LEAD_OUT','AUX_LEAD','TURN_PAD_GUIDE','TWY_CENTER','TWY_ENHANCED','ALIGNMENT'}
+    guides={'LEAD_IN','LEAD_OUT','AUX_LEAD','ICAO_AUX_LEAD','TURN_PAD_GUIDE','TWY_CENTER','TWY_ENHANCED','ALIGNMENT'}
     for item in items:
         a=marks.get(item.get('oid'));key=a['props']['mark_type'] if a else '';owner=(a.get('owner') or a['props'].get('label_asset')) if a else item.get('oid')
         if (permanently_closed(scene,owner) and key not in ('CLOSED_RWY','CLOSED_TWY','NO_ENTRY')

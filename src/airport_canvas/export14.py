@@ -110,7 +110,8 @@ def export(scene,path,kind='png',width=2400,dpi=150,transparent=False,box=None,l
                 parts.append(f'<text x="{x-x0}" y="{y1-y}"{transform}{length}{outline} text-anchor="middle" dominant-baseline="central" font-family="{family}, sans-serif" font-size="{e["size"]}" fill="{e["fill"]}">{escape(e["text"])}</text>')
                 continue
             coords=' '.join(f'{x-x0:.5f},{y1-y:.5f}' for x,y in e['points']);tag='polygon' if e['type']=='polygon' else 'polyline';dash=' stroke-dasharray="'+','.join(map(str,e['dash']))+'" stroke-dashoffset="'+str(e.get('dash_offset',0))+'"' if e.get('dash') else ''
-            parts.append(f'<{tag} points="{coords}" fill="{e.get("fill") or "none"}" stroke="{e.get("stroke") or "none"}" stroke-width="{e.get("width",.15)}" stroke-linejoin="round"{dash}/>')
+            cap=' stroke-linecap="round"' if e.get('round_caps') else ''
+            parts.append(f'<{tag} points="{coords}" fill="{e.get("fill") or "none"}" stroke="{e.get("stroke") or "none"}" stroke-width="{e.get("width",.15)}" stroke-linejoin="round"{dash}{cap}/>')
         parts.append('</svg>');Path(path).write_text('\n'.join(parts),encoding='utf8')
     else:raise ValueError('未知导出格式')
     if progress:progress(100,'导出完成')

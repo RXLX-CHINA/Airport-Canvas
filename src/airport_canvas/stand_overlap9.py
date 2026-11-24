@@ -44,8 +44,7 @@ def derived(marks,merge_pairs=()):
             bx=[p[0] for p in b['points']];by=[p[1] for p in b['points']]
             if max(ax)<=min(bx) or max(bx)<=min(ax) or max(ay)<=min(by) or max(by)<=min(ay):continue
             for j,poly in enumerate(intersection(a['points'],b['points'])):
-                axis=g.unit(a['points'][0],a['points'][1]);angle=math.degrees(math.atan2(axis[1],axis[0]))+45
-                mark=synthetic(a['owner'],'SAFETY_OVERLAP',poly,'SAFETY_OVERLAP:'+b['owner']+':'+str(j),line_width=.1,spacing=2,omit_outline=True,hatch_angle=angle,hatch_phase=0)
+                mark=synthetic(a['owner'],'SAFETY_OVERLAP',poly,'SAFETY_OVERLAP:'+b['owner']+':'+str(j),line_width=.1,spacing=2,omit_outline=True)
                 mark['name']='相邻机位安全线交叉区 '+str(j+1);result[mark['id']]=mark
     return result
 
@@ -54,7 +53,9 @@ def paint_boundaries(items,marks):
     safety=safety_marks(marks);lookup={a['id']:a for a in safety};out=[]
     for item in items:
         a=lookup.get(item.get('oid'))
-        if not a or item['type']!='line':out.append(item);continue
+        if not a or item['type']!='line' or item.get('ga_longitudinal_edge') is False:
+            out.append(item)
+            continue
         polygons=[b['points'] for b in safety if b['id']!=a['id']]
         length=g.length(item['points']);outside=list(outside_segments(item['points'],polygons));inside=[];cursor=0
         for points,station in outside:
@@ -96,6 +97,31 @@ def overlap_regions(scene,marks,merged_only=False):
     return {key:unary_union(parts) for key,parts in regions.items()}
 
 
+def dash_stand_overlaps(scene,items,marks):
+    from geometry11 import LineString,Point,lines,unary_union
+    choices=scene.data['meta'].get('dashed_stand_overlaps',{})
+    if not choices:return items
+    masks={}
+    for pair,shape in overlap_regions(scene,marks).items():
+        if pair in choices:
+            for owner in pair.split('|'):masks.setdefault(owner,[]).append(shape)
+    masks={owner:unary_union(areas) for owner,areas in masks.items()}
+    result=[]
+    for item in items:
+        mark=marks.get(item['oid'],{})
+        mask=masks.get(mark.get('owner'))
+        if mask is None or mark['props']['mark_type']!='STAND_SAFETY' or item['type']!='line':
+            result.append(item)
+            continue
+        axis=LineString(item['points'])
+        for geometry,dash in ((axis.difference(mask),item.get('dash')),(axis.intersection(mask),[.5,1])):
+            for segment in lines(geometry):
+                path=list(segment.coords)
+                result.append(dict(item,points=path,dash=dash,
+                                   dash_offset=item.get('dash_offset',0)+axis.project(Point(path[0]))))
+    return result
+
+
 def clip_merged_stand_lines(scene,items,marks):
     from geometry11 import LineString,lines,unary_union
     regions=overlap_regions(scene,marks,merged_only=True)
@@ -110,12 +136,19 @@ def clip_merged_stand_lines(scene,items,marks):
         mark=marks.get(oid,{})
         owner=mark.get('owner') or oid
         mask=masks.get(owner)
+        stand=scene.assets.get(owner,{}).get('props',{})
+        if stand.get('ga_stand') and not item.get('ga_longitudinal_edge'):
+            result.append(item)
+            continue
         if mask is None or item['type'] not in ('line','polygon') or not item.get('stroke'):
             result.append(item)
             continue
         points=item['points']
         polygon_outline=item['type']=='polygon'
         path=LineString(points+[points[0]] if polygon_outline else points)
+        if item.get('ga_longitudinal_edge'):
+            # A flat cap at the merge boundary cannot cover the transverse paint.
+            mask=mask.buffer(item.get('width',.25)/2,join_style=2)
         if not path.intersects(mask):
             result.append(item)
             continue

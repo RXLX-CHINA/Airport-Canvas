@@ -116,7 +116,18 @@ def fit_mandatory(mark):
     mark['points']=[anchor,[anchor[k]+u[k]*10 for k in (0,1)]]
 
 
-def generated_markings(scene,apply_overrides=True):
+REMOVABLE_RUNWAY_MARKS = frozenset(('MANDATORY','TWY_ENHANCED'))
+
+
+def remove_runway_instruction_markings(scene):
+    ids=[aid for aid,asset in scene.assets.items()
+         if asset['kind']=='MARKING' and asset['props']['mark_type'] in REMOVABLE_RUNWAY_MARKS]
+    with scene.transaction('去除强制性指令标识和增强型中线'):
+        for aid in ids:scene.delete(aid)
+        scene.data['meta']['suppress_runway_instruction_markings']=True
+
+
+def generated_markings(scene,apply_overrides=True,*,stand_designs=None):
     result={}
     def add(owner,key,pts,suffix='',**p):
         a=synthetic(owner,key,pts,suffix,**p);result[a['id']]=a;return a
@@ -126,41 +137,65 @@ def generated_markings(scene,apply_overrides=True):
             result.update(runway_components(a))
         elif a['kind']=='STAND' and p.get('auto_markings',True):
             length=g.length(pts);u=g.unit(pts[0],pts[-1]);q=pts[-1]
+            if p.get('helicopter_stand'):
+                from stand15 import rounded_lead
+                add(aid,'LEAD_IN',rounded_lead(a),'HELIPAD_LEAD_IN',line_width=max(.15,p.get('lead_width',.15)))
+                add(aid,'HELIPAD',[q,[q[k]+u[k]*10 for k in (0,1)]],'HELIPAD',
+                    width=p.get('aircraft_span',12),number=p.get('stand_number') or a['name'])
+                continue
             from stand_profiles import lead_design
             design=lead_design(a,scene)
+            if stand_designs is not None:
+                stand_designs[aid]=design
             from stand10 import bridge
             result.update(bridge(a,scene))
             from stand13 import support
             result.update(support(scene,a))
+            arrow=p.get('lead_type')=='ICAO'
             for part in design['paths']:
                 suffix='LEAD_IN' if part['key']=='ALIGN' else 'LEAD_BRANCH:'+part['key']
-                add(aid,'LEAD_IN',part['points'],suffix,line_width=max(.15,p.get('lead_width',.15)),dash=2 if p.get('auxiliary',False) else None,gap=2)
-            if p.get('show_number',True):
+                add(aid,'LEAD_IN',part['points'],suffix,line_width=max(.15,p.get('lead_width',.15)),dash=2 if p.get('auxiliary',False) else None,gap=2,icao_arrow=arrow)
+                arrow=False
+            from stand13 import preset_polygon
+            extra_types={'lead':'LEAD_IN','combined_lead':'LEAD_IN','icao_aux_lead':'ICAO_AUX_LEAD','work':'WORK_WAIT',
+                         'temporary':'TEMP_WAIT','bridge':'BRIDGE_COMPOSITE'}
+            for key in p.get('preset_shapes',{}):
+                family,separator,_=key.partition(':')
+                if separator and family in extra_types:
+                    add(aid,extra_types[family],preset_polygon(a,key,[]),'CUSTOM:'+key,
+                        line_width=.15 if family.endswith('lead') else .1,stand_part=True)
+            if p.get('show_number',True) and not p.get('ga_stand'):
                 for i,n in enumerate(design['numbers']):
                     origin=n['point'];direction=n['direction']
-                    add(aid,'STAND_NUMBER',[origin,[origin[k]+direction[k]*10 for k in (0,1)]],'STAND_NUMBER' if i==0 else 'STAND_NUMBER:'+str(i),text=p.get('stand_number') or a['name'],text_height=p.get('number_height',4.),text_rotation_offset=n['text_rotation_offset'])
+                    add(aid,'STAND_NUMBER',[origin,[origin[k]+direction[k]*10 for k in (0,1)]],'STAND_NUMBER' if i==0 else 'STAND_NUMBER:'+str(i),text=p.get('stand_number') or a['name'],text_height=p.get('number_height',4.),text_rotation_offset=n['text_rotation_offset'],rectangular_number=p.get('lead_type')=='ICAO')
             from editor6_geometry import stop_components
             if not p.get('auxiliary',False):result.update(stop_components(a))
             if p.get('remote_stand'):
                 from stand15 import remote_exit_lines
                 for index,path in enumerate(remote_exit_lines(a,scene)):
                     add(aid,'LEAD_OUT',path,f'REMOTE_EXIT:{index}',line_width=max(.15,p.get('lead_width',.15)))
-            if p.get('show_safety',False):
+            if p.get('show_safety',bool(p.get('ga_stand'))):
                 from stand_profiles import safety_profile
                 polygon=safety_profile(scene,a)
-                add(aid,'STAND_SAFETY',polygon,line_width=.1,dash=2 if p.get('auxiliary',False) else None,gap=2,continuous_safety14=True,open_stand_nose58=p.get('remote_stand',False))
+                if p.get('ga_stand'):
+                    from stand13 import ga_color
+                    add(aid,'STAND_SAFETY',polygon,ga_frame_color=ga_color(p,'ga_frame_color'),
+                        ga_outline_color=ga_color(p,'ga_outline_color'))
+                else:
+                    add(aid,'STAND_SAFETY',polygon,line_width=.1,dash=2 if p.get('auxiliary',False) else None,gap=2,continuous_safety14=True,open_stand_nose58=p.get('remote_stand',False))
         elif a['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE') and p.get('auto_markings',True) and p.get('auto_signs',True):
             q,u=g.at(pts,g.length(pts)*.5);v=(-u[1],u[0]);q=[q[k]+-v[k]*(p['width']/4) for k in (0,1)]
             add(aid,'LOCATION',[q,[q[k]+u[k]*10 for k in (0,1)]],text=p.get('designation') or (__import__('re').match(r'[A-Za-z][A-Za-z0-9]*',a['name']).group() if __import__('re').match(r'[A-Za-z][A-Za-z0-9]*',a['name']) else 'T'),text_height=4)
             if p.get('maxspan'):
                 q,u=g.at(pts,min(30,g.length(pts)*.2));add(aid,'MAX_SPAN',[q,[q[k]+u[k]*10 for k in (0,1)]],text='MAX SPAN '+str(p['maxspan'])+' m',maxspan=p['maxspan'])
+    suppress_instructions=scene.data['meta'].get('suppress_runway_instruction_markings',False)
     for h in holding_locations(scene):
         owner=h['owner'];q=h['point'];u=h['tangent'];v=(-u[1],u[0]);key=h['key']
         add(owner,'HOLD_A',[q,[q[k]+u[k]*10 for k in (0,1)]],key+':HOLD_A',width=h['span'])
         movement=scene.movements.get(owner,{})
-        if movement.get('show_enhanced',True):
+        if not suppress_instructions and movement.get('show_enhanced',True):
             add(owner,'TWY_ENHANCED',h['enhanced'],key+':TWY_ENHANCED')
-        if not h['auto_signs']:continue
+        if suppress_instructions or not h['auto_signs']:continue
         r=scene.assets[h['runway']];text=r['props'].get('label_a','09')+'-'+r['props'].get('label_b','27');height=2 if h['code_letter'] in ('A','B') else 4
         text_width=len(text)*height*.6;background_width=text_width+1
         settings=scene.movements.get(owner,scene.assets.get(owner,{}).get('props',{}));paired=settings.get('paired_mandatory20_2',True)
@@ -198,7 +233,9 @@ def generated_markings(scene,apply_overrides=True):
     from marks11 import refine
     result=refine(scene,result)
     from stand_overlap9 import derived
-    result.update(derived(result,scene.data['meta'].get('merged_stand_overlaps',{})))
+    pairs=scene.data['meta'].get('merged_stand_overlaps',{})
+    dashed=scene.data['meta'].get('dashed_stand_overlaps',{})
+    result.update(derived(result,set(pairs)|set(dashed)))
     from marking_standards import permanently_closed,closure_components
     result={oid:a for oid,a in result.items() if not permanently_closed(scene,a.get('owner'))}
     result.update(closure_components(scene))
@@ -216,6 +253,25 @@ def generated_markings(scene,apply_overrides=True):
     from holding_point_boards import hp_boards
     result.update(hp_boards(scene,result))
 
+    from stand11 import frame
+    for oid,mark in list(result.items()):
+        owner=mark['owner']
+        stand=scene.assets.get(owner,{})
+        overrides=stand.get('props',{}).get('preset_nodes',{})
+        suffix=oid.removeprefix('AUTO:'+owner+':')
+        absolute=overrides.get('@'+suffix)
+        if absolute==[]:
+            del result[oid]
+            continue
+        if absolute:
+            from stand13 import preset_polygon
+            mark['points']=preset_polygon(dict(stand,props=dict(stand['props'],preset_shapes={suffix:absolute})),suffix,[])
+            continue
+        edits=overrides.get(suffix)
+        if not edits or len(edits)!=len(mark['points']):continue
+        _,u,v=frame(stand)
+        mark['points']=[[x+du*u[0]+dv*v[0],y+du*u[1]+dv*v[1]]
+                        for (x,y),(du,dv) in zip(mark['points'],edits)]
     if apply_overrides:
         for oid,data in scene.data.get('generated_overrides',{}).items():
             if oid not in result:continue

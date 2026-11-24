@@ -12,7 +12,7 @@ def loop(points):
             if hit and all(g.distance(hit,p)>.001 for p in (a,b,c,d)):return True
     return False
 
-def checks(scene):
+def checks(scene,generated=None):
     issues=[]
     def issue(oid,rule,message,status='REVIEW_REQUIRED'):
         issues.append(dict(object_id=oid,status=status,rule=rule,message=message,source='6.2.8 / 6.2.16 / 6.2.18；二维几何检查',actual=None,required=None))
@@ -28,7 +28,7 @@ def checks(scene):
         if m.get('follow_existing') and m['from']['asset']==m['to']['asset'] and m.get('bezier_controls'):issue(mid,'SAME_ROUTE_CONTROLS','同一路线的沿中线连接使用原路线形状；如需自由改形，请关闭“沿已有中线转接”。')
     from automatic_markings import generated_markings
     from marking_catalog import primitives
-    marks=generated_markings(scene)
+    marks=generated_markings(scene) if generated is None else generated
     for aid,a in scene.assets.items():
         if a['kind']!='STAND':continue
         p=a['props'];length=g.length(a['points']);R=p.get('lead_radius',20)

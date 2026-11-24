@@ -38,6 +38,7 @@ def render_apron(asset,spec):
     polygon(pts,RED if shape=='apron_bridge' else WHITE,[1,1] if shape=='apron_temp' else None)
     if shape=='apron_bridge':
         center=[sum(q[k] for q in pts)/len(pts)+u[k]*p.get('home_dx',0)+v[k]*p.get('home_dy',0) for k in (0,1)]
+        center=p.get('home_center',center)
         diameter=p.get('home_diameter',3)
         home=[[center[0]+diameter/2*math.cos(i*math.pi/48),center[1]+diameter/2*math.sin(i*math.pi/48)] for i in range(96)]
         from marking_standards import outside_segments

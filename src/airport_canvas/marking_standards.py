@@ -269,7 +269,7 @@ def interrupt_paint(scene,items,generated):
                 continue
         if item['type']!='line':output.append(item);continue
         polygons=[];margin=0
-        guidance=(item.get('stroke')==YELLOW and (not key or key in ('LEAD_IN','LEAD_OUT','AUX_LEAD','TURN_PAD_GUIDE','TWY_CENTER','TWY_ENHANCED','ALIGNMENT')))
+        guidance=(item.get('stroke')==YELLOW and (not key or key in ('LEAD_IN','LEAD_OUT','AUX_LEAD','ICAO_AUX_LEAD','TURN_PAD_GUIDE','TWY_CENTER','TWY_ENHANCED','ALIGNMENT')))
         if guidance:
             pts=item['points'];x0=min(p[0] for p in pts)-1;y0=min(p[1] for p in pts)-1;x1=max(p[0] for p in pts)+1;y1=max(p[1] for p in pts)+1
             polygons=[poly for a,b,c,d,poly in white_boxes if a<=x1 and c>=x0 and b<=y1 and d>=y0];margin=.9+item.get('width',.15)/2
@@ -280,14 +280,15 @@ def interrupt_paint(scene,items,generated):
     return output
 
 
-def marking_checks(scene):
+def marking_checks(scene,generated=None):
     """Actionable failures for all catalog objects; no blanket compliance PASS."""
     from marking_catalog import CATALOG
     from automatic_markings import generated_markings
-    marks=[a for a in scene.assets.values() if a['kind']=='MARKING']+list(generated_markings(scene).values());issues=[]
+    if generated is None:generated=generated_markings(scene)
+    marks=[a for a in scene.assets.values() if a['kind']=='MARKING']+list(generated.values());issues=[]
     def fail(a,rule,message,actual,required,clause):
         issues.append(dict(object_id=a['id'],status='FAIL',rule=rule,message=message,actual=actual,required=required,source=clause))
-    mins={'TWY_CENTER':.15,'LEAD_IN':.15,'LEAD_OUT':.15,'AUX_LEAD':.15,'ALIGNMENT':.15,'TURN_PAD_GUIDE':.15,'STAND_SAFETY':.1}
+    mins={'TWY_CENTER':.15,'LEAD_IN':.15,'LEAD_OUT':.15,'AUX_LEAD':.15,'ICAO_AUX_LEAD':.15,'ALIGNMENT':.15,'TURN_PAD_GUIDE':.15,'STAND_SAFETY':.1}
     fixed={'TWY_EDGE':.15,'WINGTIP':.15,'HOLD_A':.3,'HOLD_B':.3,'INTERMEDIATE':.3,'INTERMEDIATE_POINT':.3,'TWY_SHOULDER':.9,'VOR':.15,'VOR_DIRECTION':.15,'SPEED':.15,'CHOCKS':.15,'ROAD_STAGGER':.15}
     for a in marks:
         p=a['props'];key=p['mark_type'];spec=CATALOG[key];lw=p.get('line_width',.15)

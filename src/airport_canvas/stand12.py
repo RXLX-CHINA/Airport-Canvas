@@ -10,12 +10,15 @@ def design(a,scene=None):
         o,u,v=frame(a);world=lambda q:[o[k]+u[k]*q[0]+v[k]*q[1] for k in (0,1)];vector=lambda q:[u[k]*q[0]+v[k]*q[1] for k in (0,1)]
         R=result['effective_radius'];h=p.get('number_height',4);body=5*h/4;head=2*h/4;paths=[];numbers=[]
         allowed=(1,) if p.get('lead_direction')=='LEFT' else (-1,) if p.get('lead_direction')=='RIGHT' else (-1,1)
+        uncut={}
         for side in allowed:
-            arc=[world([R*(1-math.cos(math.pi/2*i/128)),side*R*(1-math.sin(math.pi/2*i/128))]) for i in range(129)];L=g.length(arc);station=L/2;q,d=g.at(arc,station);numbers.append(dict(point=q,direction=list(d),text_rotation_offset=0))
+            arc=[world([R*(1-math.cos(math.pi/2*i/128)),side*R*(1-math.sin(math.pi/2*i/128))]) for i in range(129)]
+            uncut[side]=arc
+            L=g.length(arc);station=L/2;q,d=g.at(arc,station);numbers.append(dict(point=q,direction=list(d),text_rotation_offset=0))
             for suffix,lo,hi in [('ENTRY',0,station-body/2-1),('TURN',station+body/2+head+1,L)]:
                 if hi>lo:paths.append(dict(key=suffix+':'+str(side),points=g.subpath(arc,lo,hi)))
         merge=world([R,0]);paths.append(dict(key='ALIGN',points=[merge,world([max(g.length(a['points']),R+.05),0])]))
-        result.update(paths=paths,numbers=numbers,merge=merge);return result
+        result.update(paths=paths,numbers=numbers,merge=merge,uncut_turns=uncut);return result
     if kind not in ('A','D'):return result
     o,u,v=frame(a);world=lambda q:[o[k]+u[k]*q[0]+v[k]*q[1] for k in (0,1)]
     vector=lambda q:[u[k]*q[0]+v[k]*q[1] for k in (0,1)]

@@ -166,7 +166,7 @@ class Editor11(Editor10):
             for mode,label in entries:
                 photo=self.tool_icon(mode);small=ImageTk.PhotoImage(ImageTk.getimage(photo).resize((28,17),Image.Resampling.LANCZOS),master=self);self._photos['draw11'+mode]=small
                 b=ttk.Button(content,text=' '+label,image=small,compound='left',style='Item11.TButton',command=lambda mode=mode:self.set_mode(mode));b.pack(fill='x',pady=1);self.tool_buttons[mode]=b;self.tip11(b,label+'\n选择后在右侧设置类型、尺寸和显示侧')
-        group('预制绘画',[('RUNWAY','跑道'),('TAXIWAY','滑行路线'),('STAND','廊桥机位'),('ROAD','服务车道'),('APRON','机坪'),('APRON_RECT20_18','矩形机坪'),('APRON_TRAP20_18','梯形机坪'),('APRON_CARGO23','货机坪'),('APRON_RUNUP23','试车坪'),('DEICE10','除冰坪'),('TURN_PAD','跑道掉头坪'),('STOPWAY','停止道')],True)
+        group('预制绘画',[('RUNWAY','跑道'),('TAXIWAY','滑行路线'),('STAND','廊桥机位'),('ROAD','服务车道'),('APRON','机坪'),('APRON_RECT20_18','矩形机坪'),('APRON_TRAP20_18','梯形机坪'),('APRON_CARGO23','货机坪'),('APRON_RUNUP23','试车坪'),('DEICE10','除冰坪'),('APRON_DEICE_POLY','多边形除冰坪'),('TURN_PAD','跑道掉头坪'),('STOPWAY','停止道')],True)
         group('目的地与方向标识与标记牌',[
             ('SIGN23:PAVEMENT','目的地与方向标识'),('SIGN23:DIRECTION_BOARD','方向标记牌'),
             ('SIGN23:DESTINATION_BOARD','目的地标记牌'),('SIGN23:TAKEOFF','交叉点起飞标记牌'),
@@ -258,11 +258,15 @@ class Editor11(Editor10):
             self._inspector_token+=1;self._dirty_fields.clear();self._selected_form=None;self._editor_oid=None;self.editor_vars={};self._field_controls={};self._inspector_busy=True
             for child in self.property_body.winfo_children():child.destroy()
             try:
-                title={'STAND':'远机位' if getattr(self,'_prefab19',None)=='REMOTE_STAND' else '廊桥机位','TAXIWAY':'滑行路线','ROAD':'服务车道','DEICE10':'除冰坪'}.get(draft,CATALOG[draft[5:]]['name'] if draft.startswith('MARK:') else draft)
+                title={'STAND':{'REMOTE_STAND':'远机位','GA_STAND':'通航机场机位','HELI_STAND':'直升机坪（带引入线）'}.get(getattr(self,'_prefab19',None),'廊桥机位'),'TAXIWAY':'滑行路线','ROAD':'服务车道','DEICE10':'除冰坪'}.get(draft,CATALOG[draft[5:]]['name'] if draft.startswith('MARK:') else draft)
                 self.property_title.configure(text='绘制 · '+title);self._draft_values11=self.draft_defaults11(draft);sec=self.section('预制参数')
+                from stand13 import GA_FIELDS
                 for key,value in self._draft_values11.items():
+                    if key in ('ga_stand','remote_stand','stand_support','has_bridge','hangar19','auxiliary') and getattr(self,'_prefab19',None)=='GA_STAND':continue
                     label={'work_zone':'作业区类型','work_zone_left':'左侧作业区类型','work_zone_right':'右侧作业区类型','stand_polyline':'逐点绘制折线','lead_type':'引入线构型','has_bridge':'带廊桥','lead_radius':'引入半径 m','aircraft_length':'机长 m','aircraft_span':'翼展 m','safety_clearance':'安全净距 m','route_type':'滑行路线类型','width':'道面宽度 m','shoulder':'每侧道肩 m','corner_radius':'圆角半径 m','auto_jet_blast':'自动尾流警示','axis_side':'显示侧','deice_aircraft_length':'除冰飞机长度 m','deice_wingspan':'除冰飞机翼展 m','deice_clearance':'外围净宽 m','deice_bays':'除冰机位数','deice_vehicles':'车辆数量','deice_crossfall':'横坡 %','deice_crossfall_mode':'横坡形式','deice_collection':'除冰液回收'}.get(key,key)
-                    choices=list(__import__('stand13').WORK_ZONES59)+([__import__('stand13').NO_WORK_ZONE] if key=='work_zone_bridge_side' else []) if key.startswith('work_zone') else list('ABCD') if key=='lead_type' else list(SUBTYPES) if key=='route_type' else ['A','B','BOTH'] if key=='axis_side' and draft[5:] in __import__('roads10').ROAD_MARKS else ['CENTER','A','B','BOTH'] if key=='axis_side' else ['SINGLE','SYMMETRIC'] if key=='deice_crossfall_mode' else None
+                    if key in GA_FIELDS:label=GA_FIELDS[key][0]
+                    if key=='aircraft_span' and self._draft_values11.get('helicopter_stand'):label='机位直径 m'
+                    choices=list(__import__('stand13').WORK_ZONES59)+([__import__('stand13').NO_WORK_ZONE] if key=='work_zone_bridge_side' else []) if key.startswith('work_zone') else ['A','B','C','D','ICAO'] if key=='lead_type' else list(SUBTYPES) if key=='route_type' else ['A','B','BOTH'] if key=='axis_side' and draft[5:] in __import__('roads10').ROAD_MARKS else ['CENTER','A','B','BOTH'] if key=='axis_side' else ['SINGLE','SYMMETRIC'] if key=='deice_crossfall_mode' else None
                     kind='bool' if isinstance(value,bool) else 'int' if key in ('deice_bays','deice_vehicles') else 'radio' if key=='lead_type' else 'text' if isinstance(value,str) else 'float'
                     self.property_field(sec,'_draft_'+key,label,value,kind,choices)
                 text='点击滑行道中线作为入口，再点击停止位置；也可在空白处绘制后再吸附入口。' if draft=='STAND' else '依次点击折线顶点，Enter完成；Shift限制方向。' if draft in TAXIS+('ROAD',) else '点击除冰坪两个对角；内区停机，外围预留独立车辆活动空间。' if draft=='DEICE10' else '在绘图区放置；右键取消。'
@@ -272,6 +276,11 @@ class Editor11(Editor10):
             super().update_inspector();self._inspector_busy=True
             try:
                 a=self.scene.assets.get(self.selection)
+                if a and a['kind']=='STAND' and a['props'].get('ga_stand'):
+                    from stand13 import GA_FIELDS
+                    section=self.section('通航机场机位')
+                    for key,(label,default) in GA_FIELDS.items():
+                        self.property_field(section,key,label,a['props'].get(key,default),'text')
                 if a and a['kind']=='ROAD':
                     self.hide_field11('center_visible')
                     sec=self.section('服务车道标记');self.property_field(sec,'_road_side11','放置车道',self.lane10.get(),'text',['A','B','BOTH'])
@@ -326,6 +335,12 @@ class Editor11(Editor10):
                     if not key.startswith('_draft_'):continue
                     value=var.get();values[key[7:]]=int(value) if kind=='int' else float(value) if kind=='float' else value
                 if any(isinstance(value,(float,int)) and not isinstance(value,bool) and not math.isfinite(value) for value in values.values()):raise ValueError('数值必须有限')
+                if getattr(self,'_prefab19',None)=='GA_STAND':
+                    from stand13 import ga_stand_props
+                    values=dict(ga_stand_props(),**values)
+                elif getattr(self,'_prefab19',None)=='HELI_STAND':
+                    from stand13 import helicopter_stand_props
+                    values.update(helicopter_stand_props())
                 self._draft_values11=values;self.scene.data['meta'].setdefault('tool_defaults',{})[getattr(self,'_prefab19',None) or self._draft11]=dict(values)
                 if 'lead_type' in values:self.lead10.set(values['lead_type']);self.bridge10.set(values.get('has_bridge',False))
                 if 'route_type' in values:self.taxi_type10.set(values['route_type'])
@@ -369,14 +384,40 @@ class Editor11(Editor10):
     def pick(self,p,paths_only=False):
         if not paths_only and hasattr(self,'canvas'):
             x,y=self.screen(p)
+            from pavement_geometry import area
+            candidates={}
+            styles=self.scene.data['meta'].get('object_display',{})
             for item in reversed(self.canvas.find_overlapping(x-5,y-5,x+5,y+5)):
                 for tag in self.canvas.gettags(item):
                     if not tag.startswith('owner:'):continue
-                    oid=tag[6:];a=self.scene.assets.get(oid) or self.auto_assets.get(oid)
-                    if a:
-                        distance,station,q=g.project(a['points'],p);return 0.,oid,station,q
-                    if oid in self.scene.movements:
-                        distance,station,q=g.project(self.scene.movement_path(oid),p);return 0.,oid,station,q
+                    oid=tag[6:]
+                    if oid in candidates:continue
+                    a=self.scene.assets.get(oid) or self.auto_assets.get(oid)
+                    m=self.scene.movements.get(oid)
+                    if not (a or m):continue
+                    owner=(a or {}).get('owner') or oid
+                    if any(styles.get(key,{}).get('hidden') or styles.get(key,{}).get('opacity')==0
+                           for key in (oid,owner)):
+                        continue
+                    points=a['points'] if a else self.scene.movement_path(oid)
+                    props=a['props'] if a else m
+                    kind=a['kind'] if a else 'TAXIWAY'
+                    if kind=='STAND':
+                        from stand_profiles import safety_profile
+                        footprint=abs(area(safety_profile(self.scene,a)))
+                    elif kind=='MARKING' and CATALOG[props['mark_type']]['mode']=='AREA':
+                        footprint=abs(area(points))
+                    elif kind=='MARKING':
+                        footprint=max(1,g.length(points))*props.get('line_width',.15)
+                    elif kind in (*TAXIS,'RUNWAY','ROAD'):
+                        footprint=g.length(points)*props.get('width',1)
+                    else:
+                        footprint=abs(area(points)) if len(points)>=3 else g.length(points)*props.get('width',1)
+                    candidates[oid]=(footprint,points)
+            if candidates:
+                oid=min(candidates,key=lambda key:candidates[key][0])
+                _,station,q=g.project(candidates[oid][1],p)
+                return 0.,oid,station,q
         return super().pick(p,paths_only)
     def click(self,e):
         if self._space11 and self.scene.data['meta'].get('space_pan',True):
@@ -470,11 +511,16 @@ class Editor11(Editor10):
                     self.selection=ids[0];self.set_mode('SELECT');self.refresh()
                 except ValueError as exc:self.status.set(str(exc))
                 return
+            if key=='HELI_SAFETY':
+                if not self.points or g.distance(self.points[-1],point)>.01:
+                    self.points.append(list(point))
+                    self.redraw()
+                return
             h=snap_path(self.scene,point,max(.25,12/self.zoom));spec=CATALOG[key]
             if h and key in AXIS_MARKS and (spec['mode']=='POINT' or key in CROSS_PATHS):
                 from marks11 import place_axis
                 self.selection=place_axis(self.scene,key,h,side)[0];self.set_mode('SELECT');self.refresh();return
-            if h and key in ('TWY_CENTER','TWY_ENHANCED','ALIGNMENT','LEAD_IN','LEAD_OUT','AUX_LEAD'):
+            if h and key in ('TWY_CENTER','TWY_ENHANCED','ALIGNMENT','LEAD_IN','LEAD_OUT','AUX_LEAD','ICAO_AUX_LEAD'):
                 if not self._axis_path11:self._axis_path11=h;self.points=[h[3]];self.redraw();return
                 if h[1]==self._axis_path11[1]:
                     from pavement_geometry import offset
@@ -527,7 +573,8 @@ class Editor11(Editor10):
         polyline=len(points)>2 or self._draft_values11.get('stand_polyline',False)
         values=dict(self._draft_values11)
         names={str(a['props'].get('stand_number') or a['name']) for a in self.scene.assets.values() if a['kind']=='STAND'}
-        name=next(str(i) for i in range(101,102+len(names)) if str(i) not in names)
+        prefix='H' if values.get('helicopter_stand') else ''
+        name=next(f'{prefix}{i}' for i in range(101,102+len(names)) if f'{prefix}{i}' not in names)
         props=dict(values,show_safety=values.get('show_safety',True),stand_number=name,outward=True)
         if polyline:props.update(lead_type='C',stand_polyline=True)
         if exit_vertices:
@@ -568,6 +615,14 @@ class Editor11(Editor10):
         return [point for point,_ in vertices],hit
 
     def finish_draw(self):
+        if self.mode=='MARK:HELI_SAFETY':
+            if len(self.points)<2:return
+            self.apply_properties()
+            oid=self.scene.create_marking('HELI_SAFETY',list(self.points),**self._draft_values11)
+            self.set_mode('SELECT')
+            self.select(oid)
+            self.refresh()
+            return
         if self.mode=='STAND':
             self.apply_properties()
             if self._stand_exit_pending58:
@@ -577,7 +632,7 @@ class Editor11(Editor10):
                 self.status.set('请设置引出线终点，再按 Enter 完成。')
                 return
             points=list(self.points)
-            if getattr(self,'_prefab19',None)=='REMOTE_STAND':
+            if getattr(self,'_prefab19',None) in ('REMOTE_STAND','GA_STAND'):
                 return self.prepare_remote_exit(points)
             return self.commit_stand(points)
         if self.mode in TAXIS+('ROAD',):
@@ -633,7 +688,7 @@ class Editor11(Editor10):
                 c.create_line(*self.screen([q[k]-v[k]*width for k in (0,1)]),*self.screen([q[k]+v[k]*width for k in (0,1)]),fill='#d74187',width=2,dash=(5,3),tags='cut_preview11')
         if self.mode=='STAND' and self.points:
             p=self.world(e.x,e.y)
-            from stand15 import design,remote_exit_lines,remote_stand_props,drawn_remote_exit_props
+            from stand15 import design,draw_exit_snap,remote_exit_lines,remote_stand_props,drawn_remote_exit_props
             from stand13 import safety
             points=list(self.points)
             if not self._stand_exit_pending58 and g.distance(points[-1],p)>.01:
@@ -644,8 +699,9 @@ class Editor11(Editor10):
                 props.update(lead_type='C',stand_polyline=True)
             if self._stand_start11:
                 props.update(entry_asset=self._stand_start11[1],entry_station=self._stand_start11[2])
-            if getattr(self,'_prefab19',None)=='REMOTE_STAND':
+            if getattr(self,'_prefab19',None) in ('REMOTE_STAND','GA_STAND'):
                 props.update(remote_stand=True,has_bridge=False)
+            hit=None
             if self._stand_exit_pending58:
                 vertices,hit=self.remote_exit_draft(preview=True)
                 if vertices:
@@ -653,11 +709,22 @@ class Editor11(Editor10):
                 elif hit:
                     props.update(remote_stand_props(hit))
             a=dict(id='preview',name='101',kind='STAND',points=points,props=props)
-            for part in design(a,self.scene)['paths']:
+            if props.get('helicopter_stand'):
+                x,y=self.screen(points[-1])
+                radius=props.get('aircraft_span',12)*self.zoom/2
+                c.create_oval(x-radius,y-radius,x+radius,y+radius,outline='#f2ce54',width=2,tags='stand_preview11')
+                c.create_text(x,y,text='H',fill='#f2ce54',tags='stand_preview11')
+            paths=[dict(points=points)] if props.get('helicopter_stand') else design(a,self.scene)['paths']
+            for part in paths:
                 c.create_line(*[v for q in part['points'] for v in self.screen(q)],fill='#f2ce54',width=2,tags='stand_preview11')
             for path in remote_exit_lines(a,self.scene) if self._stand_exit_pending58 else ():
-                c.create_line(*[v for q in path for v in self.screen(q)],fill='#f2ce54',width=2,tags='stand_preview11')
-            c.create_line(*[v for q in safety(self.scene,a) for v in self.screen(q)],fill='#d45070',width=2,dash=(4,3),tags='stand_preview11')
+                c.create_line(*[v for q in path for v in self.screen(q)],
+                              fill='#35bbd3' if hit else '#f2ce54',width=2,tags='stand_preview11')
+            if hit:draw_exit_snap(self,hit,'stand_preview11')
+            boundary=safety(self.scene,a)
+            if props.get('helicopter_stand'):return
+            if props.get('ga_stand'):boundary=boundary+[boundary[0]]
+            c.create_line(*[v for q in boundary for v in self.screen(q)],fill='#d45070',width=2,dash=(4,3),tags='stand_preview11')
         if self.mode=='SELECT' and self._frame_box11:
             _,_,handles,box=self._frame_box11
             cursor='crosshair' if any(math.hypot(e.x-x,e.y-y)<10 for x,y in handles) else 'fleur' if self.border_hit11(e.x,e.y,box) else ''
@@ -817,6 +884,8 @@ class Editor11(Editor10):
         win.q.setMinimumWidth(380)
         options=ttk.LabelFrame(body,text='显示与操作',padding=10)
         options.pack(fill='x',pady=4)
+        feet_prime=tk.BooleanVar(value=m.get('feet_prime',False))
+        ttk.Checkbutton(options,text="航图中用 ' 代替 ft",variable=feet_prime).pack(anchor='w',pady=3)
         parameters=ttk.LabelFrame(body,text='图面与标记牌',padding=10)
         parameters.pack(fill='x',pady=4)
         ttk.Label(options,text='车辆行驶方向').pack(anchor='w')
@@ -828,6 +897,9 @@ class Editor11(Editor10):
         ttk.Entry(parameters,textvariable=factor).pack(fill='x')
         autosave=getattr(self,'autosave_timer',None)
         if autosave:
+            transparency=tk.StringVar(value=str(self.preview_transparency))
+            ttk.Label(parameters,text='临时图层透明度（%）').pack(anchor='w',pady=4)
+            ttk.Entry(parameters,textvariable=transparency).pack(fill='x')
             auto_enabled=tk.BooleanVar(value=self.autosave_enabled)
             auto_minutes=tk.StringVar(value=str(self.autosave_minutes))
             ttk.Checkbutton(options,text='自动保存工程副本',variable=auto_enabled).pack(anchor='w',pady=3)
@@ -837,6 +909,8 @@ class Editor11(Editor10):
         def save():
             try:
                 if autosave:
+                    percent=int(transparency.get())
+                    if not 0<=percent<=100:raise ValueError('临时图层透明度须在 0% 到 100% 之间。')
                     minutes=int(auto_minutes.get())
                     if not 1<=minutes<=120:raise ValueError('自动保存间隔应为 1 至 120 分钟。')
                 d=float(distance.get())
@@ -846,6 +920,7 @@ class Editor11(Editor10):
                 if not math.isfinite(d) or d<3:raise ValueError('提示距离至少3m')
                 with self.scene.transaction('项目首选项'):
                     m['board_enlarge_factor']=value
+                    m['feet_prime']=feet_prime.get()
                     m.update(traffic_side=traffic.get(),space_pan=space.get(),nav_visible=nav.get(),grid_visible=grid.get(),guidance_black_outline=outline.get(),jet_warning_distance=d)
                     from marks11 import refresh_axis
                     from roads11 import refresh_attachments
@@ -853,6 +928,9 @@ class Editor11(Editor10):
                         if a['kind']=='ROAD':refresh_attachments(self.scene,aid)
                         if a['kind'] in TAXIS+('RUNWAY',):refresh_axis(self.scene,aid)
                 if autosave:
+                    self.preview_transparency=percent
+                    if getattr(self.canvas,'layer_opacity_preview',None) is not None:
+                        self.canvas.set_layer_opacity_preview(1-percent/100)
                     self.autosave_enabled=auto_enabled.get()
                     self.autosave_minutes=minutes
                     self.configure_autosave()

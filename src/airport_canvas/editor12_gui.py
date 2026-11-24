@@ -129,7 +129,21 @@ class Editor12(Editor11):
         if not a or not (self.line_asset12(a) or a['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE','ROAD')):return False
         for x,y,index,kind in reversed(self._corner_handles12):
             if math.hypot(e.x-x,e.y-y)>9:continue
-            self.vertex_index=index;self._edit12=dict(aid=a['id'],index=index,kind=kind,vertices=copy.deepcopy(editable_vertices(a)),radii=copy.deepcopy(a['props'].get('corner_radii',{})),radius=a['props'].get('corner_radius',10));self.update_inspector();return True
+            self.vertex_index=index
+            props=a['props']
+            self._edit12=dict(aid=a['id'],index=index,kind=kind,vertices=copy.deepcopy(editable_vertices(a)),
+                              radii=copy.deepcopy(props.get('corner_radii',{})),radius=props.get('corner_radius',10))
+            if self._selected_form!=a['id'] or self._dirty_fields:
+                self.update_inspector()
+            elif self.line_asset12(a):
+                self._inspector_busy=True
+                try:
+                    self.editor_vars['_line_vertex12'][0].set(str(index+1))
+                    self.editor_vars['_line_radius12'][0].set(
+                        props.get('corner_radii',{}).get(str(index),props.get('corner_radius',10)))
+                finally:
+                    self._inspector_busy=False
+            return True
         return False
     def motion(self,e):
         if self._marquee12:
@@ -145,8 +159,16 @@ class Editor12(Editor11):
                 incoming=g.unit(verts[i-1],verts[i]);outgoing=g.unit(verts[i],verts[i+1]);angle=math.acos(max(-1,min(1,sum(incoming[k]*outgoing[k] for k in (0,1)))))
                 distance=max(0,sum((verts[i][k]-p[k])*incoming[k] for k in (0,1)));radii[str(i)]=min(distance,g.distance(verts[i-1],verts[i])*.49,g.distance(verts[i],verts[i+1])*.49)/max(1e-6,math.tan(angle/2))
                 self.status.set(f'顶点 {i+1} 圆角半径 {radii[str(i)]:.2f} m')
+            if d.get('candidate')==(verts,radii):
+                return
             try:
-                nodes,_=rounded_nodes(verts,d['radius'],radii);pts=evaluate(nodes);d['candidate']=(verts,radii);self.canvas.delete('corner_preview12');self.canvas.create_line(*[v for p in pts for v in self.screen(p)],fill='#00a1c3',width=3,tags='corner_preview12')
+                nodes,_=rounded_nodes(verts,d['radius'],radii)
+                coords=[v for p in evaluate(nodes) for v in self.screen(p)]
+                d['candidate']=(verts,radii)
+                if self.canvas.find_withtag('corner_preview12'):
+                    self.canvas.coords('corner_preview12',*coords)
+                else:
+                    self.canvas.create_line(*coords,fill='#00a1c3',width=3,tags='corner_preview12')
             except ValueError:pass
             return
         return super().motion(e)

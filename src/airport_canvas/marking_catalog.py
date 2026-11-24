@@ -79,6 +79,7 @@ for row in [
  ('STAND_STOP','引导机位停止线','机位与推出','6.2.16(7)','POINT','stop',{'width':2}),
  ('UNGUIDED_STOP','无引导停止标志','机位与推出','图6.2.16-8','POINT','unguided_stop',{'width':6,'text':'STOP','text_height':2}),
  ('AUX_LEAD','辅助机位引入线','机位与推出','6.2.16(8)','PATH','dash',{'dash':2,'gap':2}),
+ ('ICAO_AUX_LEAD','ICAO 辅助机位引入线','机位与推出','6.2.16(8)','PATH','dash',{'dash':2,'gap':2}),
  ('LEAD_OUT','机位引出线','机位与推出','6.2.16(5)','PATH','line',{}),
  ('PUSHBACK','飞机推出线','机位与推出','6.2.16(9)','PATH','pushback',{'dash':1,'gap':1}),
  ('PUSH_WAIT','推出等待点','机位与推出','图6.2.16-10','POINT','push_wait',{'width':1}),
@@ -130,19 +131,20 @@ CATALOG['ROAD_STOP']['defaults']['red_background']=True
 CATALOG['ROAD_STOP']['extra_fields']=[('red_background','停字红色矩形底色','bool',True)]
 EDITABLE_FIELDS['max_span']={'text_height','background'}
 EDITABLE_FIELDS['helipad']={'width','line_width','text_height'}
+register('HELI_SAFETY','直升机位安全线','直升机位安全线','机坪安全与设备','PATH','heli_safety',color='#2580cf')
 register('HELIPAD','直升机坪','直升机坪','项目绘图','POINT','helipad',color=WHITE)
 CATALOG['HELIPAD']['defaults'].update(width=24.,line_width=.3,text_height=4.)
 
 def dashed_polyline(points,dash,gap):
-    total=g.length(points);pos=0
-    while pos<total:
-        yield g.subpath(points,pos,min(total,pos+dash));pos+=dash+gap
+    path=g.PathIndex(points);pos=0
+    while pos<path.length:
+        yield path.subpath(pos,min(path.length,pos+dash));pos+=dash+gap
 
-def hatch_segments(poly,pitch=2,angle=45,phase=None):
+def hatch_segments(poly,pitch=2,angle=45,phase=0):
     a=math.radians(angle);u=(math.cos(a),math.sin(a));v=(-u[1],u[0])
     local=[[x*u[0]+y*u[1],x*v[0]+y*v[1]] for x,y in poly]
     lo=min(q[1] for q in local);hi=max(q[1] for q in local);left=min(q[0] for q in local)-1;right=max(q[0] for q in local)+1
-    start=lo if phase is None else math.floor(lo/pitch)*pitch+phase%pitch
+    start=math.floor(lo/pitch)*pitch+phase%pitch
     count=math.ceil((hi-start)/max(.1,pitch))
     if count>3000:raise ValueError('Hatch exceeds 3000 strips; increase spacing or reduce area')
     for i in range(count+1):
@@ -173,8 +175,41 @@ def primitives(asset):
     def circle(cx,cy,r,c=WHITE,w=lw,fill=None):poly([[cx+r*math.cos(t*math.pi/48),cy+r*math.sin(t*math.pi/48)] for t in range(96)],fill,c,w,True)
     def arrow(x,y,l=30,w=4,c=WHITE):
         stroke([[x,y],[x-l+10,y]],c,.3,local=True);stroke([[x-12,y-w/2],[x,y],[x-12,y+w/2]],c,1,local=True)
-    if shape in ('line','dash','safety','road_edge','pushback'):
+    if p['mark_type']=='ICAO_AUX_LEAD':
+        stroke(pts,color,lw,dash=[p.get('dash',2),p.get('gap',2)])
+        total=g.length(pts)
+        if total>=2:
+            tip=min(12.,total*.65)
+            q,u=g.at(pts,tip)
+            reach=min(2.,tip*.5)
+            v=(-u[1],u[0])
+            wings=[[q[k]-reach*u[k]+side*reach*.5*v[k] for k in (0,1)] for side in (-1,1)]
+            stroke([wings[0],q,wings[1]],color,lw)
+    elif p.get('icao_arrow') and p['mark_type']=='LEAD_IN' and g.length(pts)>=2:
+        total=g.length(pts)
+        tip=min(12.,total*.65)
+        neck=tip-min(2.5,tip*.35)
+        def edge(station,offset):
+            q,t=g.at(pts,station)
+            return [q[0]-t[1]*offset,q[1]+t[0]*offset]
+        stem=max(lw/2,.28)
+        shoulder=stem+min(.85,tip*.15)
+        profile=[(0,-stem),(neck,-stem),(neck,-shoulder),(tip,0),
+                 (neck,shoulder),(neck,stem),(0,stem)]
+        poly([edge(s,v) for s,v in profile],YELLOW,BLACK,.13)
+        if total>tip+.8:stroke(g.subpath(pts,tip+.8,total),YELLOW,lw)
+    elif shape in ('line','dash','safety','road_edge','pushback'):
         c=WHITE if p['mark_type']=='THRESHOLD_BAR' else RED if shape=='safety' else WHITE if shape in ('road_edge','pushback') else color
+        if shape=='safety' and p.get('helicopter_safety'):
+            stroke(pts+[pts[0]],WHITE,.55)
+            stroke(pts+[pts[0]],'#2580cf',.28)
+            return out
+        if shape=='safety' and p.get('ga_frame_color'):
+            for color,width in ((p['ga_outline_color'],.55),(p['ga_frame_color'],.25)):
+                for index,(a,b) in enumerate(zip(pts,pts[1:]+pts[:1])):
+                    stroke([a,b],color,width)
+                    out[-1]['ga_longitudinal_edge']=index in (1,3)
+            return out
         if shape=='safety' and p.get('open_stand_nose58') and len(pts)==8:
             stroke(pts[:4],c,lw)
             stroke(pts[4:],c,lw)
@@ -184,9 +219,13 @@ def primitives(asset):
     elif shape=='road_arrow':
         from roads11 import arrow as road_arrow
         out.append(road_arrow(oid,origin,u,width=width,length=p.get('arrow_length',4.)))
+    elif shape=='heli_safety':
+        stroke(pts,'#2580cf',lw)
     elif shape=='helipad':
-        box(-width/2,-width/2,width/2,width/2,'#737b83',WHITE,lw)
-        text('H',c=WHITE)
+        circle(0,0,width/2,c=YELLOW,w=lw)
+        text('H',c=YELLOW,h=min(height,width*.35))
+        if p.get('number'):
+            text(p['number'],x=-width*.65,c=YELLOW,h=min(height,width*.19))
     elif shape=='rwy_center':
         from runway import centerline_geometry
         count,segment,gap=centerline_geometry(g.length(pts))
@@ -196,9 +235,10 @@ def primitives(asset):
         for side in (-1,1):
             path=offset(pts,side*d)
             if shape=='stagger':
-                total=g.length(path);pos=0 if side<0 else p.get('dash',.75)
-                while pos<total:
-                    stroke(g.subpath(path,pos,min(total,pos+p.get('dash',.75))),c,lw);pos+=p.get('dash',.75)+p.get('gap',.75)
+                axis=g.PathIndex(path);pos=0 if side<0 else p.get('dash',.75)
+                dash,gap=p.get('dash',.75),p.get('gap',.75)
+                while pos<axis.length:
+                    stroke(axis.subpath(pos,min(axis.length,pos+dash)),c,lw);pos+=dash+gap
             else:stroke(path,c,lw)
     elif shape=='enhanced':
         stroke(pts,YELLOW,lw)
@@ -292,7 +332,9 @@ def primitives(asset):
         head=p.get('head_length',2*h/4)
         glyph_width=max(1,len(value))*h*.4
         half=max(h,glyph_width)/2+.5
-        poly([[-body/2,-half],[body/2,-half],[body/2+head,0],[body/2,half],[-body/2,half]],YELLOW,BLACK,.1,True)
+        corners=[[-body/2,-half],[body/2,-half],[body/2,half],[-body/2,half]]
+        if not p.get('rectangular_number'):corners.insert(2,[body/2+head,0])
+        poly(corners,YELLOW,BLACK,.1,True)
         text(value,0,0,BLACK,h,text_width=glyph_width,rotation=angle-90+p.get('text_rotation_offset',0))
     elif shape.startswith('lead_'):
         from stand_profiles import lead_design
@@ -329,8 +371,8 @@ def primitives(asset):
         c=RED if shape=='red_hatch' else WHITE
         if not p.get('omit_outline',False):poly(pts,None,c,lw,dash=[1,.5] if shape=='temp_wait' else [.5,1] if p['mark_type']=='SAFETY_OVERLAP' else None)
         if shape in ('red_hatch','white_hatch','pallets'):
-            angle=p.get('hatch_angle',math.degrees(math.atan2(pts[1][1]-pts[0][1],pts[1][0]-pts[0][0]))+(0 if shape=='pallets' else 45))
-            for segment in hatch_segments(pts,p.get('spacing',2)+(lw if shape in ('red_hatch','white_hatch') else 0),angle,p.get('hatch_phase')):stroke(segment,c,lw)
+            angle=math.degrees(math.atan2(pts[1][1]-pts[0][1],pts[1][0]-pts[0][0])) if shape=='pallets' else 45
+            for segment in hatch_segments(pts,p.get('spacing',2)+(lw if shape in ('red_hatch','white_hatch') else 0),angle):stroke(segment,c,lw)
         if p.get('text'):
             center=[sum(q[k] for q in pts)/len(pts) for k in (0,1)];out.append(dict(type='text',oid=oid,points=[center],text=p['text'],fill=c,size=height,rotation=0,world_text=True,font='hei'))
     elif shape=='chocks':box(-width/2+.075,-width/2+.075,width/2-.075,width/2-.075,None,WHITE,.15);text(p.get('text','轮挡'),0,0,WHITE,height,font='hei',rotation=angle+90,text_width=max(.1,min(width-.3,len(p.get('text','轮挡'))*height*.65)))

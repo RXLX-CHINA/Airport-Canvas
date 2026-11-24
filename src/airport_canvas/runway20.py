@@ -81,10 +81,11 @@ def _relocate(scene,result):
                 for m in marks:m['props']['intersection_unresolved20']=True
     return out
 
-def checks(scene):
+def checks(scene,generated=None):
     from automatic_markings import generated_markings
     out=[];done=set()
-    for mark in list(generated_markings(scene).values())+list(scene.assets.values()):
+    if generated is None:generated=generated_markings(scene)
+    for mark in list(generated.values())+list(scene.assets.values()):
         p=mark['props'];owner=mark.get('owner') or p.get('label_asset')
         if not p.get('intersection_shift20') and not p.get('intersection_unresolved20'):continue
         key=(owner,p.get('mark_type'),p.get('intersection_shift20'))

@@ -1,12 +1,14 @@
 # Airport Canvas
 
+[项目门户 / Project website](https://rxlx-china.github.io/Airport-Canvas/) · [最新版本 / Latest release](https://github.com/RXLX-CHINA/Airport-Canvas/releases/latest)
+
 **Airport Canvas** 是一款 Windows 桌面机场绘图编辑器，用于绘制可编辑的机场平面图、配置助航灯光和排版模拟航图。它适用于机场布局学习、模拟场景设计和制图。软件中的审阅提示用于辅助检查，模拟航图仅供学习，不用于实际导航。
 
 作者 · **刃下狼血**  
 版本 · **v1.0**  
 许可证 · **GPL-3.0-only**
 
-[English](#english) · [快速入门](src/airport_canvas/QUICK_START.md) · [完整手册](src/airport_canvas/USER_GUIDE.md) · [更新日志](src/airport_canvas/CHANGELOG.md)
+[English](#english) · [快速入门](src/airport_canvas/QUICK_START.md) · [完整手册](src/airport_canvas/USER_GUIDE.md) · [图文教程](https://rxlx-china.github.io/Airport-Canvas/Airport-Canvas-1.2-Tutorial.html) · [更新日志](https://rxlx-china.github.io/Airport-Canvas/Airport-Canvas-Changelog.html)
 
 ## 特色工作流
 

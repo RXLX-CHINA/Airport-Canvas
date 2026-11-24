@@ -141,7 +141,17 @@ def taxi_edges(scene,surfaces,holds,lighting=False):
                           for a in routes.values() if a['kind']=='APRON_TAXIWAY')
         geometries.extend(polygon(piece['points']).intersection(apron)
                           for piece in surfaces['fillets'] if len(piece['points'])>=3)
-    union=unary_union(geometries,grid_size=.0001)
+    grid=.0001
+    union=unary_union(geometries,grid_size=grid)
+    # A sliver between joined pavement pieces becomes a false painted island
+    # when the marking inset expands it. Keep holes with a core on the union grid.
+    cleaned=[]
+    for footprint in polygons(union):
+        holes=[ring for ring in footprint.interiors
+               if not Polygon(ring).buffer(-grid).is_empty]
+        cleaned.append(footprint if len(holes)==len(footprint.interiors)
+                       else Polygon(footprint.exterior,holes))
+    union=unary_union(cleaned,grid_size=grid)
     mask=[polygon(a['points']).buffer(.46,join_style=2) for a in scene.assets.values() if a['kind']=='APRON']
     # Taxi pavement was cut at the runway perimeter. Suppress the inset
     # boundary of that cut on all four sides, including at a runway end.
@@ -200,11 +210,20 @@ def taxi_edges(scene,surfaces,holds,lighting=False):
 def runway_edges(scene,surfaces):
     from pavement_geometry import offset
     aa=[a for a in scene.assets.values() if a['kind']=='RUNWAY'];out=[]
-    mouth=unary_union([polygon(s['points']) for s in surfaces['pavement'] if s['kind'] not in ('RUNWAY','ROAD')]+[LineString(a['points']).buffer(a['props']['width']/2,cap_style=2,join_style=1) for a in aircraft_routes(scene).values()])
+    pavement=unary_union([polygon(s['points']) for s in surfaces['pavement']
+                          if s['kind'] not in ('RUNWAY','ROAD')])
+    routes=[(LineString(route['points']),route['props']['width']) for route in aircraft_routes(scene).values()]
     for a in aa:
         if not a['props'].get('edges_visible',True):continue
         w=.9 if a['props']['width']>=30 else .45
-        blocked=unary_union([polygon(g.rectangle(b['points'],b['props']['width']+.05)) for b in aa if b['id']!=a['id']]+[mouth.buffer(w/2+.05)])
+        runway_polygon=polygon(g.rectangle(a['points'],a['props']['width']))
+        # A nearby parallel route is not a runway mouth merely because its
+        # nominal width overlaps the runway. Use the actual pavement there.
+        contacts=[axis.buffer(width/2,cap_style=2,join_style=1)
+                  for axis,width in routes if axis.intersects(runway_polygon)]
+        mouth=unary_union([pavement,*contacts])
+        blocked=unary_union([polygon(g.rectangle(b['points'],b['props']['width']+.05))
+                             for b in aa if b['id']!=a['id']]+[mouth.buffer(w/2+.05)])
         for side in (-1,1):
             path=LineString(offset(a['points'],side*(min(30,a['props']['width']/2)-w/2)))
             for line in lines(path.difference(blocked)):

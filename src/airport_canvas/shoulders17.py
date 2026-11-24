@@ -15,8 +15,9 @@ def bars(scene,surfaces):
     axes=[LineString(a['points']) for a in eligible];tree=STRtree(axes)
     route_paths=[g.PathIndex(a['points']) for a in eligible]
     fillet_axes=[LineString(p['arc']) for p in surfaces.get('fillets',[]) if len(p.get('arc',[]))>1]
+    from shapely import clip_by_rect, make_valid
     from shapely.prepared import prep
-    mask=shoulder;probe=prep(shoulder.buffer(.01));out=[];used=[]
+    probe=prep(shoulder.buffer(.01));out=[];used=[]
     holds=__import__('automatic_markings').holding_locations(scene);hold_axes=[]
     for h in holds:
         if 'point' not in h:continue
@@ -45,14 +46,18 @@ def bars(scene,surfaces):
                 n=[-u[1]*sign,u[0]*sign]
                 if not probe.covers(Point(q[0]+n[0]*.25,q[1]+n[1]*.25)):continue
                 ray=LineString([q,[q[k]+n[k]*30 for k in (0,1)]])
-                candidates=sorted(lines(ray.intersection(shoulder)),key=lambda p:p.distance(point))
+                x0,y0,x1,y1=ray.bounds
+                # Keep the clip boundary outside both the ray and its paint footprint.
+                local=clip_by_rect(shoulder,x0-1,y0-1,x1+1,y1+1)
+                if not local.is_valid:local=make_valid(local)
+                candidates=sorted(lines(ray.intersection(local)),key=lambda p:p.distance(point))
                 if not candidates or candidates[0].distance(point)>.3:continue
                 reach=candidates[0].length;length=min(7.5,reach if reach<3.5 else max(0,reach-1.5))
                 if length<.5:continue
                 axis=LineString([q,[q[k]+n[k]*length for k in (0,1)]])
                 if len(holding.query(axis,predicate='dwithin',distance=7.5)):continue
                 # Clip the full 0.9-m paint footprint, not sparse centre samples.
-                ink=axis.buffer(.45,cap_style=2).intersection(mask)
+                ink=axis.buffer(.45,cap_style=2).intersection(local)
                 for poly in polygons(ink):
                     if poly.area>.2:out.append(dict(type='polygon',oid=a['id'],points=[list(p) for p in poly.exterior.coords][:-1],fill=YELLOW,width=.9,shoulder_bar17=True))
                 used.append(q);break

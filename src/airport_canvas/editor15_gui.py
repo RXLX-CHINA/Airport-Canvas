@@ -81,7 +81,7 @@ class Editor15(Editor14):
             if a and a['kind']=='STAND':
                 self.hide_field11('move_snap14');sec=self.section('引入线绑定与吸附');self.property_field(sec,'snap_tolerance15','控制点吸附距离 m',a['props'].get('snap_tolerance15',2.),'float')
                 if a['props'].get('auxiliary'):
-                    self.hide_field11('lead_type');self.property_field(sec,'lead_type','辅助机位引入构型',a['props'].get('lead_type','A'),'radio',list('ABCD'))
+                    self.hide_field11('lead_type');self.property_field(sec,'lead_type','辅助机位引入构型',a['props'].get('lead_type','A'),'radio',['A','B','C','D','ICAO'])
             if a and a['props'].get('crossing_full13'):
                 self.hide_field11('crossing_skew13');sec=self.section('横道剪切');self.property_field(sec,'crossing_skew13','横跨方向倾斜角 °',a['props'].get('crossing_skew13',0),'float')
         finally:self._inspector_busy=False

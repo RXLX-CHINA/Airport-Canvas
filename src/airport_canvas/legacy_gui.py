@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 import sys
+from interface_language import APPROACH_LEVELS
 import qt_compat as tk
 from qt_compat import ttk,filedialog,messagebox
 import traceback
@@ -111,7 +112,7 @@ class AirportApp(tk.Tk):
         fm=tk.Menu(menu,tearoff=False);menu.add_cascade(label='文件',menu=fm)
         for label,cmd in [('新建场景  Ctrl+N',self.new),('打开场景  Ctrl+O',self.open),('保存场景  Ctrl+S',self.save),('另存为',lambda:self.save(True)),('导入旧版跑道/滑行道 JSON',self.import_legacy),('导出 PNG',lambda:self.export('png')),('导出 SVG',lambda:self.export('svg')),('导出核验报告',self.export_report),('退出',self.close)]:fm.add_command(label=label,command=cmd)
         em=tk.Menu(menu,tearoff=False);menu.add_cascade(label='编辑',menu=em)
-        for label,cmd in [('撤销 Ctrl+Z',self.undo),('重做 Ctrl+Y',self.redo),('编辑属性',self.edit_selected),('切分所选路线',self.split_selected),('删除对象',self.delete_selected),('编辑允许操纵矩阵',self.movement_matrix),('运行情景',self.edit_scenario),('项目坐标与设计基准',self.project_settings)]:em.add_command(label=label,command=cmd)
+        for label,cmd in [('撤销 Ctrl+Z',self.undo),('重做 Ctrl+Y',self.redo),('编辑属性',self.edit_selected),('切分所选路线',self.split_selected),('删除对象',self.delete_selected),('编辑允许操纵矩阵',self.movement_matrix),('运行情景',self.edit_scenario),('机场整体参数',self.project_settings)]:em.add_command(label=label,command=cmd)
         hm=tk.Menu(menu,tearoff=False);menu.add_cascade(label='帮助',menu=hm)
         hm.add_command(label='操作说明',command=self.help);hm.add_command(label='规范来源与覆盖状态',command=self.coverage)
         header=tk.Frame(self,bg='#172d43',height=65);header.pack(fill='x');header.pack_propagate(False)
@@ -293,7 +294,7 @@ class AirportApp(tk.Tk):
             u=g.unit(*pts);fields += [field('length','路径长度 (m)','float'),field('heading','真方位 / 本地朝向 (°)','float')]
             values.update(length=round(g.length(pts),4),heading=round(math.degrees(math.atan2(u[0],u[1]))%360,6))
         if a['kind']=='RUNWAY':
-            for key,label,typ,choices in [('label_a','物理 A 端号码','text',None),('label_b','物理 B 端号码','text',None),('level_a','A 端类别','text',['v','0','1','2','3']),('level_b','B 端类别','text',['v','0','1','2','3']),('displaced_a','A 端入口内移 (m)','float',None),('displaced_b','B 端入口内移 (m)','float',None),('lda_a','A 端 LDA (m，可空)','float',None),('lda_b','B 端 LDA (m，可空)','float',None)]:fields.append(field(key,label,typ,choices))
+            for key,label,typ,choices in [('label_a','物理 A 端号码','text',None),('label_b','物理 B 端号码','text',None),('level_a','A 端类别','text',APPROACH_LEVELS),('level_b','B 端类别','text',APPROACH_LEVELS),('displaced_a','A 端入口内移 (m)','float',None),('displaced_b','B 端入口内移 (m)','float',None),('lda_a','A 端 LDA (m，可空)','float',None),('lda_b','B 端 LDA (m，可空)','float',None)]:fields.append(field(key,label,typ,choices))
         if a['kind']=='STAND':
             fields += [field('guidance','引导方式','text',['GUIDED','UNGUIDED']),field('stop_reference','停止点参考','text',['NOSEWHEEL','LEFT_SEAT']),field('entry_mode','进出方式','text',['SELF_IN_PUSH_OUT','SELF_IN_OUT','TOW_IN_OUT']),field('group','机位组'),field('configuration','主/辅配置名称'),field('excludes','互斥机位（点击多选）','multi',[(x['id'],x['name']) for x in self.scene.assets.values() if x['kind']=='STAND' and x['id']!=oid])]
         if a['kind'] in ('STAND','APRON_TAXIWAY','STAND_TAXILANE'):
@@ -329,17 +330,20 @@ class AirportApp(tk.Tk):
 
     def edit_scenario(self):
         sc=self.scene.scenario;v=dict(sc)
-        fields=[field('name','情景名称'),field('date','情景日期 YYYY-MM-DD'),field('night','夜间运行','bool'),field('rvr','RVR (m)','float'),field('aircraft_wingspan','航空器翼展 (m)','float'),field('aircraft_length','航空器长度 (m)','float'),field('wheelbase','轮距/轴距数据 (m，可空)','float'),field('cockpit_to_nosewheel','驾驶舱至鼻轮 (m，可空)','float'),field('closed_assets','场景关闭对象（点击多选）','multi',[(a['id'],a['name']) for a in self.scene.assets.values()]),field('active_stands','占用机位（点击多选）','multi',[(a['id'],a['name']) for a in self.scene.assets.values() if a['kind']=='STAND']),field('permitted_movements','演示授权连接（非真实许可）','multi',[(m['id'],m['name']) for m in self.scene.movements.values()])]
+        fields=[field('name','情景名称'),field('date','情景日期 YYYY-MM-DD'),field('night','夜间运行','bool'),field('aircraft_wingspan','航空器翼展 (m)','float'),field('aircraft_length','航空器长度 (m)','float'),field('wheelbase','轮距/轴距数据 (m，可空)','float'),field('cockpit_to_nosewheel','驾驶舱至鼻轮 (m，可空)','float'),field('closed_assets','场景关闭对象（点击多选）','multi',[(a['id'],a['name']) for a in self.scene.assets.values()]),field('active_stands','占用机位（点击多选）','multi',[(a['id'],a['name']) for a in self.scene.assets.values() if a['kind']=='STAND']),field('permitted_movements','演示授权连接（非真实许可）','multi',[(m['id'],m['name']) for m in self.scene.movements.values()])]
         r=FormDialog(self,'运行情景 · 不控制真实机场',fields,v).result
         if not r:return
         try:self.scene.set_scenario(**r);self.route_preview=None;self.refresh()
         except (ValueError,TypeError) as exc:messagebox.showerror('修改未提交',str(exc),parent=self)
 
     def project_settings(self):
-        r=FormDialog(self,'项目坐标与设计基准',[field('name','项目名称'),field('crs','坐标参考系 / 本地设计标识'),field('design_date','设计基准日 YYYY-MM-DD'),field('magnetic_declination','磁差 (°，东正，可空)','float')],self.scene.data['meta']).result
+        r=FormDialog(self,'机场整体参数',[field('name','项目名称'),field('crs','坐标参考系 / 本地设计标识'),field('design_date','设计基准日 YYYY-MM-DD'),field('magnetic_declination','磁差 (°，东正，可空)','float'),field('airport_elevation','机场海拔 (m)','float'),field('runway_elevation_unit','跑道高程默认标注单位','text',['m','ft']),field('rvr','RVR (m)','float')],
+                     {'runway_elevation_unit':'m','airport_elevation':0.,**self.scene.data['meta'],'rvr':self.scene.scenario['rvr']}).result
         if r:
             try:
-                with self.scene.transaction('修改项目基准'):self.scene.data['meta'].update(r)
+                with self.scene.transaction('修改项目基准'):
+                    self.scene.scenario['rvr']=r.pop('rvr')
+                    self.scene.data['meta'].update(r)
                 self.refresh()
             except (ValueError,TypeError) as exc:messagebox.showerror('修改未提交',str(exc),parent=self)
 

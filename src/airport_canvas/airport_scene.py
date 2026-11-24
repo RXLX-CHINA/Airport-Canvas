@@ -104,7 +104,7 @@ class AirportScene:
             for key in ('lead_radius','aircraft_span','fuselage_width','safety_clearance','wing_station'):
                 if key in p:finite(p[key],key,0,positive=True)
             if a['kind']=='STAND' and p.get('wing_station',1)>=p.get('aircraft_length',sc['aircraft_length']):raise ValueError('Wing station outside aircraft length')
-            if a['kind']=='STAND' and p.get('lead_type','A') not in ('A','B','C','D'):raise ValueError('Invalid lead-in type')
+            if a['kind']=='STAND' and p.get('lead_type','A') not in ('A','B','C','D','ICAO'):raise ValueError('Invalid lead-in type')
             if a['kind']=='STAND':
                 if p.get('lead_direction','BOTH') not in ('BOTH','LEFT','RIGHT'):raise ValueError('Invalid lead-in direction')
                 if not 45<=p.get('lead_label_angle',60)<=75:raise ValueError('A/D编号轴线角须在45～75度之间')
@@ -330,7 +330,11 @@ class AirportScene:
                 from curve_model import sync_authoring
                 sync_authoring(a,points)
                 a['points']=copy.deepcopy(points)
-            if props:a['props'].update(copy.deepcopy(props))
+            if props:
+                if (a['kind']=='MARKING' and a['props'].get('mark_type') in ('HOLD_A','HOLD_B')
+                        and 'width' in props and props['width']!=a['props'].get('width')):
+                    a['props']['hold_width_manual']=True
+                a['props'].update(copy.deepcopy(props))
             if a['props'].get('deice_layout12'):a['points']=__import__('deice12').layout(self,a)['pavement']
             if a['kind']=='STAND':
                 p=a['props'];parent=p.get('entry_asset')

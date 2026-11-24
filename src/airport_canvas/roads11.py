@@ -113,15 +113,25 @@ def arrow(owner,q,u,width=1.2,length=4.,turns=None):
         if merged:local=[list(p) for p in max(merged,key=lambda p:p.area).exterior.coords][:-1]
     return dict(type='polygon',oid=owner,points=[[q[k]+u[k]*x+v[k]*y for k in (0,1)] for x,y in local],fill='#ffffff',road_arrow11=True)
 
-def paint(scene):
+def paint(scene,stand_designs=None):
     from geometry11 import road_union,aircraft_union,LineString,Point,polygon,unary_union,lines,polygons
     from roads10 import roads,lane_pose
     from automatic_markings import synthetic
     from marking_catalog import primitives
     aa=roads(scene)
     if not aa:return []
-    union=road_union(scene);aircraft=__import__('roads18').checker_mask(scene);out=[]
-    def owner(point):return min(aa,key=lambda a:g.project(a['points'],point)[0])['id']
+    from roads18 import checker_mask
+    union=road_union(scene);aircraft=checker_mask(scene,stand_designs);out=[]
+    axes=[LineString(road['points']) for road in aa]
+    def owner(point):
+        query=Point(point)
+        distances=[axis.distance(query) for axis in axes]
+        nearest=min(distances)
+        candidates=[road for road,d in zip(aa,distances) if d<=nearest+1e-8]
+        if len(candidates)==1:
+            return candidates[0]['id']
+        return min(candidates,key=lambda road:g.project(road['points'],point)[0])['id']
+    warnings=generated(scene).values()
     # Heal sub-centimetre tessellation seams at two exact Bezier halves before
     # deriving the exterior; these are not road end caps.
     edge=union.buffer(.02,join_style=1).buffer(-.095,join_style=1).boundary
@@ -152,10 +162,11 @@ def paint(scene):
         pts=[list(q) for q in line.coords]
         if line.length>.1:
             mid=line.interpolate(line.length/2);before=line.interpolate(max(0,line.length/2-.01));after=line.interpolate(min(line.length,line.length/2+.01));u=g.unit([before.x,before.y],[after.x,after.y]);left=[-u[1],u[0]];inside=union.covers(Point(mid.x+left[0]*.1,mid.y+left[1]*.1));shifted=line.offset_curve(.075 if inside else -.075)
+            road_id=owner(pts[0])
             for path in lines(shifted):
-                marks=primitives(synthetic(owner(pts[0]),'ROAD_STAGGER',[list(q) for q in path.coords],'CHECKER',line_width=.15,spacing=0))
+                marks=primitives(synthetic(road_id,'ROAD_STAGGER',[list(q) for q in path.coords],'CHECKER',line_width=.15,spacing=0))
                 for mark in marks:mark['road_checker11']=True
-                if scene.assets[owner(pts[0])]['props'].get('edges_visible',True):out.extend(marks)
+                if scene.assets[road_id]['props'].get('edges_visible',True):out.extend(marks)
     for a in aa:
         if a['props'].get('closed'):continue
         total=g.length(a['points']);axis=LineString(a['points']);junctions=intersections(scene,a)
@@ -168,7 +179,7 @@ def paint(scene):
         # Reserve sign footprints and one arrow station per approach, not a pile
         # of overlapping heads on every generated turn curve.
         for lane in ('A','B'):
-            reserved=occupied(scene,a['id'],lane)+[(m['props'].get('road_station',0),'JET_BLAST') for m in generated(scene).values() if m['props'].get('road_id')==a['id'] and m['props'].get('lane_side')==lane]
+            reserved=occupied(scene,a['id'],lane)+[(m['props'].get('road_station',0),'JET_BLAST') for m in warnings if m['props'].get('road_id')==a['id'] and m['props'].get('lane_side')==lane]
             positions=[]
             for j in junctions:
                 if j['other']['kind']!='ROAD':continue

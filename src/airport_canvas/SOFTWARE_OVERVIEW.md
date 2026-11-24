@@ -1,4 +1,4 @@
-Airport Canvas v1.0 · Author / 作者 — 刃下狼血
+Airport Canvas v1.2 · Author / 作者 — 刃下狼血
 
 ## 21.6 分图层导出
 

@@ -19,7 +19,8 @@ def sync(scene):
     # Keep explicit attached waiting marks on the full pavement + shoulder span.
     for m in scene.assets.values():
         p=m['props'];parent=scene.assets.get(p.get('label_asset'))
-        if p.get('mark_type') in ('HOLD_A','HOLD_B') and parent:p['width']=parent['props']['width']+2*parent['props'].get('shoulder',0)
+        if p.get('mark_type') in ('HOLD_A','HOLD_B') and parent and not p.get('hold_width_manual'):
+            p['width']=parent['props']['width']+2*parent['props'].get('shoulder',0)
 
 def crossing(scene,p,tolerance):
     options=[]

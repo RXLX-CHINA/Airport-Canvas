@@ -25,10 +25,6 @@ def normalize(scene,marks,reposition=False):
         if key=='RWY_CIRCLE' and root and root['kind']=='RUNWAY':
             from scene_render import runway_center_width
             p.update(width=root['props']['width']/2,line_width=runway_center_width(scene,root))
-        if key=='HOLD_A' and a.get('owner'):
-            movement=scene.movements.get(a['owner'])
-            taxi=next((scene.assets[movement[side]['asset']] for side in ('from','to') if scene.assets[movement[side]['asset']]['kind']!='RUNWAY'),None) if movement else root
-            if taxi:p['width']=taxi['props']['width']+(2*taxi['props'].get('shoulder',0) if taxi['props'].get('hold_include_shoulders13',True) else 0)
         if key=='ROAD_STOP':p['red_background']=True
         if key=='BRIDGE_COMPOSITE' and a.get('owner') in scene.assets:
             p['home_white19']=scene.assets[a['owner']]['props'].get('home_white19',False)
@@ -90,14 +86,15 @@ def move_label(scene,aid,point):
             _,station,_=g.project(owner['points'],point);base,u=side_pose(scene,owner,station,p.get('axis_side','CENTER'))
             p['attached_station']=station;p['axis_offset19']=[point[k]-base[k] for k in (0,1)]
 
-def checks(scene):
+def checks(scene,generated=None):
     from automatic_markings import generated_markings
     from geometry11 import LineString,Polygon,unary_union
     from marking_catalog import primitives
     surfaces=[LineString(a['points']).buffer(a['props']['width']/2,cap_style=2) for a in scene.assets.values() if a['kind'] in ('RUNWAY','TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE')]
     surfaces += [Polygon(a['points']) for a in scene.assets.values() if a['kind']=='APRON']
     pavement=unary_union(surfaces);out=[]
-    for a in list(generated_markings(scene).values())+list(scene.assets.values()):
+    if generated is None:generated=generated_markings(scene)
+    for a in list(generated.values())+list(scene.assets.values()):
         if a['props'].get('mark_type')!='NO_ENTRY':continue
         boards=[Polygon(i['points']) for i in primitives(a) if i['type']=='polygon' and i.get('fill')=='#cf383e']
         if any(board.difference(pavement).area>.01 for board in boards):out.append(dict(object_id=a['id'],status='REVIEW_REQUIRED',rule='NO_ENTRY_FOOTPRINT19',message='统一尺寸的 NO ENTRY 超出已知道面，请调整位置或道面；未自动缩小字高。',source='MH5001—2021 6.2.12',actual=no_entry_height(scene),required='符合指标字高，背景边距≥0.5m，并核对实际道面'))

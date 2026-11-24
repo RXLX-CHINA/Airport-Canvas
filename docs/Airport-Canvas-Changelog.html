@@ -1,0 +1,1978 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Airport Canvas 更新日志</title><style>
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f2f6f5;color:#1b3040;font:16px/1.75 system-ui,'Microsoft YaHei',sans-serif}
+header{background:#123b3c;color:#fff;padding:38px 22px}header>div,main{max-width:1060px;margin:auto}h1{font-size:clamp(32px,5vw,52px);margin:0;line-height:1.2}
+header p{margin:12px 0 0;color:#cfebe8}header a{color:#fff}main{background:#fff;padding:30px clamp(18px,4vw,52px) 65px}
+nav,.related{display:flex;flex-wrap:wrap;gap:9px 16px}nav{border:1px solid #d9e7e3;background:#f0f7f5;padding:14px 18px;margin-bottom:24px;border-radius:10px}
+a{color:#07665c;text-underline-offset:.22em}h2{margin:42px 0 16px;padding-bottom:8px;border-bottom:2px solid #289c8b}h3{margin:35px 0 12px;color:#0b5b55}h4{margin:22px 0 8px}
+p{margin:10px 0}ul,ol{padding-left:1.5em}table{display:block;overflow:auto;width:100%;border-collapse:collapse;margin:16px 0;border:1px solid #d6e3e0;font-size:.92em}
+tr:nth-child(even) td{background:#f1f7f6}td,th{min-width:110px;padding:8px 11px;border-bottom:1px solid #d8e4e1;text-align:left;vertical-align:top}th{background:#e1f0ec}
+td p,th p{margin:0}li+li{margin-top:.35em}footer{margin-top:44px;border-top:1px solid #d8e4e1;padding-top:18px}pre{overflow:auto}img{display:block;max-width:100%;height:auto;margin:16px 0}
+</style></head>
+<body><header><div><div class="related"><a href="./">Airport Canvas 门户</a><a href="./Airport-Canvas-1.2-Tutorial.html">图文教程</a></div><h1>Airport Canvas 更新日志</h1><p>当前版本 v1.2 · Windows x64</p></div></header>
+<main><nav aria-label="历史版本目录"><a href="#history-1">Ver 正式版本</a><a href="#history-2">Ver 1.2 · Windows x64</a><a href="#history-3">Pre · PySide6 预发布阶段</a><a href="#history-4">Beta · Tkinter 编辑器</a><a href="#history-5">Alpha · Runway_Generator</a><a href="#history-6">档案依据</a><a href="#history-7">Pre 26.1 备份索引</a></nav>
+
+<p>历史版本按产品阶段统一记为 <span style=" font-weight:700;">Alpha → Beta → Pre → Ver</span>。历史编号供文档与检索使用，旧压缩包、目录和工程中的原始标识可用下表反查。时间采用留存目录和文件名原样记录，备份时间表示资料已出现的时间点。</p>
+<table><tr>
+<th scope="col">
+<p><span style=" font-weight:700;">阶段</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">规范编号</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">原始名称或编号</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">分界</span></p></th></tr>
+<tr>
+<td>
+<p>Alpha</p></td>
+<td>
+<p>Alpha 0.1、0.2</p></td>
+<td>
+<p>Runway_Generator、Runway Generator 修复版</p></td>
+<td>
+<p>从跑道和滑行道的二维图形生成器开始</p></td></tr>
+<tr>
+<td>
+<p>Beta</p></td>
+<td>
+<p>Beta 1.0–20.18</p></td>
+<td>
+<p>首代场面编辑器 GUI、Airport Canvas 2.0–20.18</p></td>
+<td>
+<p>Tkinter 桌面编辑器；早期编辑器和生成器曾留存在同一目录</p></td></tr>
+<tr>
+<td>
+<p>Pre</p></td>
+<td>
+<p>Pre 26.0.0–26.0.5、26.1.x</p></td>
+<td>
+<p>PySide6 Editor 21.0–21.6</p></td>
+<td>
+<p>迁入 PySide6，直至正式 Windows 打包前</p></td></tr>
+<tr>
+<td>
+<p>Ver</p></td>
+<td>
+<p>Ver 1.0、1.0.1、1.1.0、1.2</p></td>
+<td>
+<p>v1.0、v1.0.1、v1.1.0、v1.2</p></td>
+<td>
+<p>从首套正式 Windows x64 安装版与便携版开始</p></td></tr></table>
+<p>Beta 沿用可核对的原数字。Alpha 0.1、0.2 与 Beta 1.0 是为无明确原始版本号的历史阶段补编的编号。Pre 26.0.0–26.0.5 按顺序对应旧 21.0–21.5。旧 21.6 统称 Pre 26.1，已找到标题的变更按首次出现在备份日志中的顺序编号为 Pre 26.1.1 起。同一备份才首次出现的多项按当时日志排列，具体提交先后待核实。Pre 26.1-bNNN 是备份索引。</p>
+<h2 id="history-1">Ver 正式版本</h2>
+<h3 id="history-2">Ver 1.2 · Windows x64</h3>
+<h4>绘图与节点编辑</h4>
+<ul>
+<li>位图校准依次点击起点和终点，支持 Ctrl+Z、Ctrl+Y，以及直接输入旋转角度。</li>
+<li>默认按 T 切换非位图图层的临时透明度，再按一次恢复各图层原有不透明度。默认不透明度为 50%，快捷键与数值均可在设置里调整。</li>
+<li>节点编辑支持 Alt 悬停预览插入位置、Alt+单击插入节点，以及在选中节点后按 Delete 删除。掉头坪支持节点编辑并修复底色显示。</li>
+<li>调整自动岔道道肩的裁切和绘制顺序，把道肩放在道面下方，修复透明度预览恢复后出现的异常圆块。斜线阴影统一以工程世界坐标原点和 45° 排布。</li>
+<li>优化快速脱离道、交汇处引导线、边线以及末端截断，修正部分急弯自相交、联络道道肩越界和连接断开。</li></ul>
+<h4>机位、机坪与航站楼</h4>
+<ul>
+<li>批量绘制普通远机位或通航机位前可查看各机位安全线。自由方向下整排机位保持同一朝向，按住 Shift 时才锁定垂直绘制。</li>
+<li>批量绘制可读取工程内保存的方案。编辑菜单提供机位预设管理，支持停止线和作业区样式调整。修复批量绘制普通远机位时出现的 <span style=" font-family:'monospace';">id</span> 错误与无法确认的问题。</li>
+<li>自定义机位支持删除组成对象，廊桥回位点可移动。改进批量命名、停止线编辑、通航机位布置和 B 类引入线在极端转角下的同侧衔接。</li></ul>
+<h4>F8 模拟航图</h4>
+<ul>
+<li>增加可开关的升降带（Runway Strip），以黑色细虚线显示边界并自动标注长宽。修复与机坪编号同时绘制时出现的 <span style=" font-family:'monospace';">normal</span> 错误。</li>
+<li>合并端部徽标以物理跑道端为定位基准，编号居中，磁航向嵌入外圈下缘。优先向跑道中线左右微调，避开道面、进近灯光和邻近滑行道，并改善瞄准点配置。</li>
+<li>改进航图布局、注记尺寸及相关标注的显示与导出，补齐多处英文界面词条。</li></ul>
+<h4>性能与发行</h4>
+<ul>
+<li>节点拖动复用预览线，减少属性面板重建和强制全视口刷新。场景绘制复用服务车道路径索引与机位引入线几何。</li>
+<li>工程校验共享自动标记，并用空间索引筛选交叉候选。ZSAM 对测中场景重建由约 5.78 秒降至 3.74 秒，校验由约 4.02 秒降至 1.34 秒。校验报告逐项一致。</li>
+<li>产品版本为 <span style=" font-family:'monospace';">1.2</span>，Windows 文件版本为 <span style=" font-family:'monospace';">1.2.0.0</span>。发行形态为安装包与绿色 ZIP。</li></ul>
+<h3>Ver 1.1.0 · Windows 打包</h3>
+<p>留存于仓库 <span style=" font-family:'monospace';">release/</span> 的文件包括 Windows x64 安装器、便携 ZIP 和 1.0 → 1.1.0 增量包。旧会话曾准备公开发布，线上发布状态待核实。</p>
+<p>便携版和增量包内的日志均确认以下更新：</p>
+<ul>
+<li>改进滑行道路口、联络道几何、边线与等待位置标志宽度。</li>
+<li>快速脱离道反向道面与反向中线使用独立的几何设置。</li>
+<li>支持按分区和位置为机位编号。</li>
+<li>改进 F8 航图符号、内移入口高程标注及跑道高程编辑。</li>
+<li>扩充英文界面翻译。</li></ul>
+<h3>Ver 1.0.1 · 首发后的修补</h3>
+<p>旧会话记录了 PAPI、F8 视野保持及航图配色修复，并提供 <span style=" font-family:'monospace';">Test-Airport-Canvas.bat</span> 作为测试入口。后续 YMMB 本地修复工作也曾以 1.0.1 为基线。独立正式发布附件待核实。</p>
+<h3>Ver 1.0 · 首次正式 Windows 打包</h3>
+<p>本地正式构建目录保留 <span style=" font-family:'monospace';">AirportCanvas_1.0_Windows_x64_Portable.zip</span> 和 <span style=" font-family:'monospace';">AirportCanvas_1.0_Windows_x64_Setup.exe</span>，文件日期为 2026-11-21。Git 仓库同日留下初始提交和首批源码。GitHub 附件的实际公开时间待核实。</p>
+<p>作者 / Author — 刃下狼血</p>
+<ul>
+<li>Windows x64 绿色版和安装版使用 EXE 入口。 / Direct EXE entry for Windows x64 portable and installed editions.</li>
+<li>安装版注册 ACP 文件类型及专用图标。 / Installer registration for ACP projects and their dedicated icon.</li>
+<li>新增中英文快速入门、软件关于页和更新日志入口。 / Chinese and English quick starts, About and Release Notes.</li>
+<li>ZSQD 示例移除底图，保留机场对象。 / ZSQD retains editable airport objects and ships without background imagery.</li></ul>
+<h2 id="history-3">Pre · PySide6 预发布阶段</h2>
+<h3>Pre 26.1 · 原 21.6</h3>
+<p>该阶段先后覆盖标记牌、真北、边线、道面关闭、路口及快速脱离道，随后扩展位图、F8 模拟航图、英文界面、示例和导出。旧会话另有 <span style=" font-family:'monospace';">AirportCanvas_21_6_Release_Staging.zip</span>，处于正式 EXE 打包前的发布准备阶段。</p>
+<h4>Pre 26.1.1 · 标记牌绑定与真北</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b003</span>。</p>
+<p>新增固定工程倍数放大和两种尺度导出。按当前可见牌面绘制控制框。</p>
+<p>修复手动标记牌的来源及目标锚定、分割截断和恢复，并同步普通视图、F5 和 F6 的真北变换。</p>
+<h4>Pre 26.1.2 · 标识与节点编辑补丁</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b004</span>。</p>
+<p>更新目的地与方向标识和标记牌编辑、跑道端点拖动、真北与网格快捷键。调整脱离跑道组合牌方向、工具图标及深色绘图区。Qt 道面连续填充减少自动转弯连接缝。</p>
+<h4>Pre 26.1.3 · 道面关闭与机场示例补丁</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b005</span>。</p>
+<p>修复空几何、反向脱离跑道牌图样和深色网格与属性栏。新增关闭机坪和禁入标识联动、字高与放大倍率控制，并替换示例入口。</p>
+<h4>Pre 26.1.4 · 大场景显示与 DEMO 补丁</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b006</span>。</p>
+<p>修复 F6 残留铺面底色、导航窗口初始尺寸、深色模式属性选项和比例尺。快速脱离道与跑道端部联络道更新。统一描边改为三个启用开关。</p>
+<h4>Pre 26.1.5 · 路口、描边与状态栏补丁</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b007</span>。</p>
+<p>修复统一描边未实际启用元素描边的问题、阈值附近的铺面出头与截断路口残角、快速脱离道禁入牌错位和重复，以及深色属性面板的白色嵌套页面。</p>
+<h4>Pre 26.1.6 · 审阅、边线与启动补丁</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b008</span>。</p>
+<p>修复截断后的 L 形拐弯边线缺口、反向延长线禁入牌布置。美化 NO ENTRY 设置和审阅对话框，支持空白启动。</p>
+<h4>Pre 26.1.7 · 外弯与跑道末端补丁</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b009</span>。</p>
+<p>修正截断转弯外半径，增加拖动末端判定范围和停止道裁切端面；恢复跑道标志层级、引入线选择和属性滚轮。</p>
+<h4>Pre 26.1.8 · 机位标记和界面补丁</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b010</span>。</p>
+<p>增加独立机位引入线、停止线与编号描黑边。调整服务车道交汇边线、导航默认位置、半透明框选及深色显示提示。</p>
+<h4>Pre 26.1.9 · 停止道与习惯保存</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b011</span>。</p>
+<p>停止道吸附端头，截断圆弧补道肩条带，F6 使用机位号标签，路口引导线以真实切点分界，覆盖关闭跑道的快速脱离道及端部联络道。新增 ACI 习惯保存。</p>
+<h4>Pre 26.1.10 · 引导线与界面修补</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b012</span>。</p>
+<ul>
+<li>修正服务车道封口实线、圆角中线切线吸附、路口转弯引导线属性和未知文字底衬。</li>
+<li>禁止驶入牌按断面归并并就近定位；修复导航窗首开及视图主题切换后的网格。</li>
+<li>增加 Shift 方形／等比缩放以及航站楼主体布尔运算；更新项目首选项和子窗口外边距。</li>
+<li>恢复导航标题和拖动，避开机位停止线，限制自动标记牌的排版偏移并修正立式牌字高误报。</li></ul>
+<h4>Pre 26.1.11 · 弯道增强中线和岔路标记牌</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b013</span>。</p>
+<p>修复增强型中线在斜交及隐藏直行引导线的路口走直线的问题。自动方向牌逐岔路生成；地面方向标志保留原规则。</p>
+<h4>Pre 26.1.12 · 位置文字底板描边</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b014</span>。</p>
+<p>位置文字描黑边改为矩形底板描边，并实时跟随所属滑行道。</p>
+<h4>Pre 26.1.13 · 反向汇入引导线吸附</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b014</span>。</p>
+<p>补齐反向汇入曲线吸附和与主线的路径连接。</p>
+<h4>Pre 26.1.14 · 快速脱离道统一编辑</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b015</span>。</p>
+<p>统一快速脱离道属性入口；添加正反向两端半径、自动或指定长度的直线段、局部预览和释放提交。修复两点增强型中线预览及跑道端弧线吸附。</p>
+<h4>Pre 26.1.15 · 滑行道类型与参数保存</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b016</span>。</p>
+<p>修复连接道改类型时道面分类没有更新的问题，同时保留同批属性编辑。无法应用的类型修改不再被保存流程忽略。</p>
+<h4>Pre 26.1.16 · 滑行道类型即时提交</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b017</span>。</p>
+<p>类型下拉框直接提交并刷新，避免依赖属性表的延迟处理。</p>
+<h4>Pre 26.1.17 · 属性下拉框回显修复</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b018</span>。</p>
+<p>修复只读属性下拉框重建时显示首项，导致 E4 的快速脱离道显示为普通滑行道的问题。</p>
+<h4>Pre 26.1.18 · 快速脱离道短联络段与标记</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b020</span>。</p>
+<p>增加短联络段和进入道面标记开关；平滑斜向连接的跑道引入线。</p>
+<h4>Pre 26.1.19 · 仅允许滑出道面标记</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b021</span>。</p>
+<p>将「显示等待线」改为「仅允许滑出道面标记」，并反转勾选状态。</p>
+<h4>Pre 26.1.20 · 机坪绘图入口</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b022</span>。</p>
+<p>移除菜单栏的机坪菜单。矩形、梯形、多边形及专用机坪可在绘图工具中使用。</p>
+<h4>Pre 26.1.21 · 位图底图</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b023</span>。</p>
+<p>增加位图导入、线段比例校准及底图属性。</p>
+<p>F8 机场基准点默认采用白色线条和透明内部。</p>
+<h4>Pre 26.1.22 · F8 模拟航图</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b104</span>。</p>
+<p>新增 F8 航图视图、对象配色和显示开关、航图标识、跑道长度标签、裁切和排版预览、ACP 保存以及多格式导出。</p>
+<h4>Pre 26.1.23 · F8 绘制工具</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b105</span>。</p>
+<p>航图配色和排版移至 F8 顶部工具栏。统一适合窗口、区分两类道肩、固定机位编号字号，新增标识吸附预览、五种热点轮廓和对象选择框。</p>
+<h4>Pre 26.1.24 · F8 机位编号和热点标签</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b106</span>。</p>
+<p>机位编号随地图同比缩放。热点编号方框跟随轮廓配色。</p>
+<h4>Pre 26.1.25 · 工具栏布局</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b108</span>。</p>
+<p>编辑机位相交区域按钮移至左侧工具组。NO ENTRY 使用圆形禁止驶入图标，跑道编号使用矩形号码牌。</p>
+<h4>Pre 26.1.26 · F8 航图排版</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b109</span>。</p>
+<p>增加纸张、裁切、页面导航、版面元素拖动、多行频率及图内 Note。更新署名、图例、比例尺、共起点双北箭头、ARP 避让和热点形状选项。</p>
+<h4>Pre 26.1.27 · F8 机场基准点图例</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b110</span>。</p>
+<p>机场基准点在浅色图例中使用黑色空心符号。</p>
+<h4>Pre 26.1.28 · F8 排版编辑</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b111</span>。</p>
+<p>增加撤销与重做、调整导航布局与参数区滚轮行为，并为自动避让道面的 HS 标签加入同色引线。</p>
+<h4>Pre 26.1.29 · F8 航图边饰与跑道标注</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b112</span>。</p>
+<p>调整图名、机场名称、频率、Note、双北箭头和页脚；跑道编号垂直显示并随裁切调整，跑道尺寸支持长×宽和道面材质。</p>
+<h4>Pre 26.1.30 · F8 频率页眉</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b112</span>。</p>
+<p>频率按字段纵向排列在页眉中央，续行对齐频率文字。放行许可频率使用 CLR。</p>
+<h4>Pre 26.1.31 · F8 图面细节</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b113</span>。</p>
+<p>统一页眉字级与图框间距，限制 ARP 尺寸，优化风向标图例、北箭头及跑道标注。</p>
+<h4>Pre 26.1.32 · F8 页眉间距</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b114</span>。</p>
+<p>增大页眉文字与图框上缘的间距。</p>
+<h4>Pre 26.1.33 · F8 航图垂直居中</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b115</span>。</p>
+<p>按实际绘制范围平衡整张航图上下留白。</p>
+<h4>Pre 26.1.34 · F8 航站楼避让与 ARP 自动定位</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b116</span>。</p>
+<p>HS 标签避让航站楼和标注。自动定位 ARP 使用所有跑道端点的几何中心。</p>
+<h4>Pre 26.1.35 · 界面语言、便携配置与 ARP 工具</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b117</span>。</p>
+<p>本地化关闭类型及方向选项，提供英文界面选项。配置移入软件目录。自动定位 ARP 移到右侧工具参数。</p>
+<h4>Pre 26.1.36 · 英文界面覆盖</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b118</span>。</p>
+<p>Expanded English translations for menus, drawing tools, markings, lighting, properties and chart layout. Localised dialog titles and prompts.</p>
+<h4>Pre 26.1.37 · 退出清理</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b119</span>。</p>
+<p>主窗口关闭后明确结束 Qt 事件循环，停止定时器并取消未完成导出。</p>
+<h4>Pre 26.1.38 · 英文编辑反馈</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b119</span>。</p>
+<p>Translated more lighting, stand and runway editing messages, canvas badges, and dynamic operation feedback.</p>
+<h4>Pre 26.1.39 · ZSQD 示例工程</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b121</span>。</p>
+<p>将青岛流亭 ZSQD 设为唯一内置示例。</p>
+<h4>Pre 26.1.40 · 分图层导出与英文菜单</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b122</span>。</p>
+<p>新增 PSD、PDF、PPTX 分图层导出并支持全部模式 ZIP。补齐文件菜单和常用绘制工具的英文。</p>
+<h4>Pre 26.1.41 · 灯光、示例与矢量导出</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b122</span>。</p>
+<p>远机位引出线加入中线灯。滑行道边灯沿实际道面边界布置。PAPI 可按跑道端设置。流亭示例在当前窗口打开，启动脚本不等待主进程，SVG 使用矢量元素。</p>
+<h4>Pre 26.1.42 · Qt 英文词库</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b122</span>。</p>
+<p>使用 Qt Linguist 词库，补译灯光、导出、标牌和航图选项。</p>
+<h4>Pre 26.1.43 · 英文侧栏与状态栏</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b123</span>。</p>
+<p>补译侧栏属性、标牌选项和状态提示。对象树保留原始字段供工程逻辑读取。</p>
+<h4>Pre 26.1.44 · 英文导航与航图图例</h4>
+<p>最早留存记录为 <span style=" font-family:'monospace';">Pre 26.1-b124</span>。</p>
+<p>补译导航标题、审阅计数、真北与磁北标注和航图图例。</p>
+<h3>Pre 26.0.5 · 缩放性能与标记牌布局（原 21.5）</h3>
+<ul>
+<li>固定尺寸模式复用牌面图元，批量计算道面及牌面之间的避让。</li>
+<li>Alt+Enter 改用原生 Qt 快捷键，覆盖主键盘与数字键盘 Enter。</li>
+<li>自动生成脱离跑道／位置牌及多支路组合长牌。</li>
+<li>普通机场图省略 F6 字样，连续绘制移至工具栏按钮最右侧。</li></ul>
+<h3>Pre 26.0.4 · 牌面与深色工作区（原 21.4）</h3>
+<p>固定缩放时的牌面高度并清除道面相交，增加截图中的组合、强制性与信息牌面，自动生成已知跑道等待位置的号码组合牌。增加深色模式，连续绘制移到主工具栏。</p>
+<h3>Pre 26.0.3 · 商业机场、标记牌与显示（原 21.3）</h3>
+<ul>
+<li>将显示操作集中到顶部「显示」，比例尺移入二级菜单。</li>
+<li>归北改为 Alt+Enter，模式标签固定大小，增加独立真北与磁北指示。</li>
+<li>扩宽狭窄滑行道上的自动强制性指令标识，保持对边线的净距。</li>
+<li>加入标记牌屏幕放大、F5 彩色分段、标准目的地词、交叉点起飞牌、跑道等待位置牌与转换频率牌。</li>
+<li>加入货机坪、试车坪和虚构的双跑道商业机场 DEMO。</li></ul>
+<h3>Pre 26.0.2 · 标识、显示与画布操作（原 21.2）</h3>
+<ul>
+<li>新增三类描边与标记牌可见性、视口 FPS 和进程内存显示。</li>
+<li>新增 F5 标识编辑、八方向矢量箭头、标记牌一键生成，以及快速脱离道反向分支和机坪的进出引导。</li>
+<li>新增 Alt+右键拖动旋转画布，Alt+Space 恢复北方向上。</li>
+<li>修正 F6 路线编号文字锚点、服务车道转角底色、跑道编号强制性指令标识的边线间距，以及增强中线和黑色背衬的等待标志避让。</li>
+<li>末端截断由工具栏鼠标键选择方向，在画布上左键确认、右键取消。</li></ul>
+<h3>Pre 26.0.1 · 界面与边线修复（原 21.1）</h3>
+<p>修复导航窗尺寸及关闭按钮、提示尺寸和样式、场景对象栏空白、末端截断按钮及属性基本页裁切。修复跑道侧边及端部的滑行道封口边线，以及部分旧工程打开时的迁移错误。</p>
+<h3>Pre 26.0.0 · PySide6（原 21.0）</h3>
+<p>Airport Canvas 是以机场图生成为核心的所见即所得机场编辑软件。本版将桌面界面和交互绘图后端迁移至原生 PySide6 / Qt Widgets，沿用20.18版本的机场模型、业务回调和ACP JSON结构。</p>
+<h4>安装、启动和更新</h4>
+<ol>
+<li>完整解压本包到可写文件夹，推荐使用 Windows x64 Python 3.12。</li>
+<li>双击 <span style=" font-weight:700;">start_gui.bat</span>。已满足依赖时直接打开；首次启动会在程序目录创建<span style=" font-family:'monospace';">.venv</span>，使用包内<span style=" font-family:'monospace';">_wheels</span>安装依赖。Python 3.12 x64的依赖已离线打包并校验SHA-256，包含PySide6-Essentials、Shiboken、Pillow、NumPy、Shapely、FontTools。其他Python版本需要下载匹配的依赖。</li>
+<li>沿用旧工程时，从文件菜单打开原ACP。工程仍为UTF-8 JSON。建议首次另存为一个新ACP，方便对照。</li>
+<li>覆盖安装到旧程序目录可运行<span style=" font-family:'monospace';">python install_gui.py --target &quot;你的原项目路径&quot;</span>。安装器备份所有被替换的程序文件，保留用户自己的ACP。安装后使用<span style=" font-family:'monospace';">start_gui.bat</span>启动。直接运行<span style=" font-family:'monospace';">python gui.py</span>要求当前Python已经安装requirements.txt中的依赖。</li></ol>
+<p>无需执行PowerShell脚本。启动安装可单独执行<span style=" font-family:'monospace';">python bootstrap_qt21.py --install-only</span>；依赖检查为<span style=" font-family:'monospace';">python bootstrap_qt21.py --check</span>。依赖安装失败时保留项目文件，错误写入gui_error.log。</p>
+<h4>操作与功能沿用</h4>
+<table><tr>
+<th scope="col">
+<p><span style=" font-weight:700;">工作范围</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">保留的功能与操作</span></p></th></tr>
+<tr>
+<td>
+<p>文件</p></td>
+<td>
+<p>新建、打开、保存、另存为、旧JSON导入、ACP工程、PNG/SVG导出选项和导出进度</p></td></tr>
+<tr>
+<td>
+<p>基本交互</p></td>
+<td>
+<p>左键选择/框选、Ctrl多选、边框移动/调整尺寸、独立旋转手柄、Shift方向限制、按首选项启用空格拖动画布、鼠标缩放、撤销重做、复制剪切粘贴、右键取消</p></td></tr>
+<tr>
+<td>
+<p>跑道</p></td>
+<td>
+<p>自动航向编号、对向编号及R/C/L、平行跑道编号、内移/临时入口、中心圆、停止道、关闭/开放及交叉跑道标志避让</p></td></tr>
+<tr>
+<td>
+<p>滑行路线</p></td>
+<td>
+<p>多段折线自动圆角、节点和圆角编辑、中线吸附、连接与预览、直线连接、交汇控制点、类型选择、增强中线、道肩及道肩条带、动态名称</p></td></tr>
+<tr>
+<td>
+<p>编号编辑</p></td>
+<td>
+<p>逻辑分段、独立分支命名、合并选择、末端截断及恢复；逻辑编号操作保持原几何</p></td></tr>
+<tr>
+<td>
+<p>机坪与机位</p></td>
+<td>
+<p>矩形/梯形/多边形机坪及布尔操作、成套/辅助/组合机位、ABCD引入、沿弧编号、机型停止线、机位安全线、廊桥活动区、作业区及轮挡区、绑定与子对象编辑</p></td></tr>
+<tr>
+<td>
+<p>建筑与设施</p></td>
+<td>
+<p>航站楼主体、指廊、廊桥生成/编号/吸附、机库、除冰坪、跑道掉头坪、布局净距告警</p></td></tr>
+<tr>
+<td>
+<p>服务道路</p></td>
+<td>
+<p>双向车道、分界虚线、路口箭头、棋盘格交界、尾流/限速/人行横道吸附及车道侧选择</p></td></tr>
+<tr>
+<td>
+<p>标记和审阅</p></td>
+<td>
+<p>原标记目录、统一NO ENTRY尺寸、道面信息与实体方向标记牌的独立开关、黑白底纹/描边设置、审阅与规则来源、搜索、属性分页</p></td></tr>
+<tr>
+<td>
+<p>显示</p></td>
+<td>
+<p>F6彩色编号模式、机位和引入线参照、路线名称、跑道编号、除冰坪中线、米制/英尺比例尺、背景网格、可移动/隐藏导航窗、实时坐标</p></td></tr></table>
+<p>工具入口、原有业务回调和快捷键保留。Qt层负责原生窗口、菜单、树、标签页、输入框、复选框、单选按钮、对话框、滚动、计时及鼠标键盘事件适配。历史模块中的<span style=" font-family:'monospace';">tk</span>/<span style=" font-family:'monospace';">ttk</span>局部变量现指向本项目的Qt接口适配层，所有可视对象均为PySide6对象；软件运行不创建Tcl/Tk解释器。</p>
+<h4>界面与流畅度</h4>
+<p>统一浅色工作站界面、低对比度分隔线、蓝青色选中状态、紧凑图标工具栏、原生属性输入控件和六类属性标签页。导航窗、比例尺及选择/预览层沿用原逻辑；工具提示正确定位并自动适配内容尺寸。帮助菜单使用Qt Markdown阅读窗口，可渲染标题、表格、图片、链接并搜索正文。</p>
+<p>绘图器使用米制原生矢量路径。缩放与平移只改变视图变换；Qt场景索引裁剪不可见图元。相邻且属于同一对象、样式相同的绘制指令合并批量提交，维持原绘制顺序；不同对象保留独立归属。修改属性时，未变化的路径增量复用。文字采用原字体的矢量轮廓，虚线长度保持米制，不受旧Tk的255像素限制。选择框的世界坐标边界按模型修订号缓存，平移时重新投影。</p>
+<p>完整DEMO的19,129条绘制指令批处理为2,449个Qt绘图对象。BENCHMARK_QT21.json记录Windows离屏软件渲染测量，包含全图和深度放大。该测量用于验证路径复用和响应成本，不等同用户显示器帧率。本版默认Qt原生绘图路径，没有把未经本机验证的GPU加速设为强制前提。</p>
+<p><img src="data:image/webp;base64,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" alt="PySide6 阶段留存的完整机场与属性界面截图" width="1280" height="800" loading="lazy"></p>
+<h4>技术与验证边界</h4>
+<p>共享模型模块的字节一致清单和业务函数保留清单见QT_FEATURE_PARITY.json；工具/组件属性回调检查见QT_UI_COVERAGE21.json。既有模型、事件交互、控件、绘制与导出测试共同验证迁移。单独覆盖真实Qt鼠标/键盘事件，防止事件从viewport向父窗口重复传播，确保一次点击只增加一个点、F6只切换一次、Ctrl+Z只撤销一次。</p>
+<p>旧测试中的Tk虚线数组/位图上传断言已改为Qt路径、视图矩阵和米制QPen断言；初始宽度断言采用现有模型18m，包含道肩的等待线采用现有38m；自由移动/旋转测试显式解除中线绑定。上述测试适配不改动产品的原有业务逻辑。</p>
+<p>已对Qt离屏窗口进行界面截图检查和真实输入事件测试，并验证干净离线环境启动。实际显卡、屏幕DPI、窗口管理器和超大工程的响应仍受用户硬件影响。所有CAAC规则状态、尚待工程复核的标准实现范围沿用20.18；迁移不构成新增规范认证。</p>
+<p>Qt技术依据：<a href="https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QGraphicsView.html"><span style=" color:#0000ff;">Qt Graphics View</span></a>。第三方组件按各自许可分发，离线wheel中保留原始许可资料。</p>
+<hr />
+<h2 id="history-4">Beta · Tkinter 编辑器</h2>
+<h3>Beta 20.18</h3>
+<p>本版新增机坪形状与布尔运算、工具栏末端截断、动态方向信息；修复合并选择与关闭/重新开放时的派生缓存。F6彩色分段保留机位及引入线作为参照，仍只编辑独立的滑行道逻辑编号。</p>
+<h4>使用方法</h4>
+<ul type="circle">
+<li><span style=" font-weight:700;">F6</span>：切换普通机场图/彩色编号视图。机位安全线、编号、引入线保留显示；“信息引导 → F6保留机位及引入线”可以关闭该参照层。切换不写入道面几何，不把机位与滑行道合并。拖动和缩放会重新投影参照层。</li>
+<li><span style=" font-weight:700;">合并选择</span>：路线编辑合并首尾相接的整条滑行道后，点击任意成员会选中整条链，普通视图显示共同选择框，F6显示青色虚线强调。仅同名但未合并的路线不会加入。移动已合并成员端点不会清除选择关系；“强行独立分支”解除该分支的关系。不同位置不相接的路线仍是各自独立的选择链。</li>
+<li><span style=" font-weight:700;">末端截断</span>：点击工具栏“✂│”，悬停显示垂直截断预览与将删除的左端；左键立即删除世界坐标左端，右键立即删除右端。线的原始绘制方向不影响左右；完全竖直时以下端作为左端。截断位置距两端至少1m。Ctrl+Z撤销；“信息引导 → 恢复选中滑行道的截断”恢复原始道面。Esc退出。逻辑编号分段仍不改变实体几何；末端截断则明确改变可见道面。连接并预览产生的连接道仍用节点编辑移动端点，不通过此工具切其实体。</li>
+<li><span style=" font-weight:700;">机坪形状</span>：“机坪”菜单选择矩形/梯形/自定义多边形。前两种点击两个对角点完成，有轮廓预览；多边形按原方式依次点顶点、Enter完成、右键取消。梯形预设上边收窄，可再通过顶点编辑调整。</li>
+<li><span style=" font-weight:700;">机坪布尔操作</span>：Ctrl多选普通机坪，菜单选择并集、交集或差集。差集为最后选中的机坪减去其他选中机坪。交集为空时不改动原对象。孔洞和分离岛保留；结果拆为无孔简单区域放入一个组，便于沿用ACP结构与现有绘图器。Ctrl+Z整次撤销。不支持除冰坪、掉头坪等带专用依赖的预制区域参与。</li>
+<li><span style=" font-weight:700;">自动方向信息</span>：“信息引导”菜单分别开关道面信息标志和方向标记牌。按实际相接路线、允许行驶方向与逻辑子段名称生成最近相交滑行道的方向；路线改名、关闭、重新开放、移动后重算。滑行道属性中可关闭该对象的自动方向信息。不会指向单纯在空间上靠近却没有交接关系的路线，也不生成掉头箭头。</li></ul>
+<h4>标准核对及边界</h4>
+<p>按照用户指定的 <span style=" font-weight:700;">MH5001—2013 8.2.13</span> 与 <span style=" font-weight:700;">9.7.4.3</span> 分别实现两种信息显示，未把历史版条号误写成2021版条号。其他既有模块仍保留各自标注的标准版本。</p>
+<table><tr>
+<th scope="col">
+<p><span style=" font-weight:700;">项目</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">道面信息标志：8.2.13</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">实体方向标记牌：9.7.4.3</span></p></th></tr>
+<tr>
+<td>
+<p>颜色</p></td>
+<td>
+<p>位置黑底黄字；方向/目的地黄底黑字</p></td>
+<td>
+<p>方向黄底黑字，与黑底黄字位置牌组成组</p></td></tr>
+<tr>
+<td>
+<p>箭头排布</p></td>
+<td>
+<p>文字右侧，箭头单独用矢量绘制</p></td>
+<td>
+<p>左转箭头置文字左，右转和直行置右</p></td></tr>
+<tr>
+<td>
+<p>尺寸</p></td>
+<td>
+<p>默认字高4m，受限缩小但不低于2m；箭头约2m</p></td>
+<td>
+<p>单独物理比例模板，不能套用道面4m字高</p></td></tr>
+<tr>
+<td>
+<p>设置</p></td>
+<td>
+<p>按来向可读，位于道面内；空间不足不强制塞入</p></td>
+<td>
+<p>默认在来向左侧；无中间等待位置时按代码选择交叉口前60/40m；已有中间等待位置时优先其延长线</p></td></tr></table>
+<p>自动标志仅给出<span style=" font-weight:700;">最近相接滑行道</span>，不自动推断通往远处航站楼、机坪或跑道的完整运行路线。真正的目的地标记牌另受9.7.4.4约束，不能因名称中有“目的地”就与其他牌混设。窄道面或过短的进近段不够放置时跳过，须人工补充审阅；不能以自动生成数量代替规范覆盖率。</p>
+<p>方向标记牌当前为二维方案模板：附录H完整字形、表32净距、复杂交叉口全部候选面板排序、自身路线明显转弯的补充面板、对转弯开始切点及所有障碍物的净距检查尚需工程复核；默认横向外移11m、字高0.4m不代表对任意机场类别均已验算。道面字体使用现有字体近似，非标准图26逐字符描摹。自动方向标志不等同施工合规证明。</p>
+<p>资料来源：<a href="https://www.caac.gov.cn/PHONE/SJ_IPHONE/JCS_IP/YWLJ_JCS/BZZZ_JCS/GCJSBZ/BZXZ/201511/P020151111506883414047.pdf"><span style=" color:#0000ff;">CAAC官方MH5001—2013全文</span></a>，信息标志印刷页63–64、方向标记牌印刷页126–131。另核对<a href="https://www.caac.gov.cn/XXGK/XXGK/BZGF/HYBZ/202112/t20211201_210343.html"><span style=" color:#0000ff;">MH5001—2021发布页</span></a>：新版相应条目为6.2.13和8.4.3，工程使用需明确适用版本。用户提供的Bilibili页面本次无法获取正文，未将其作为已逐图核对的依据。</p>
+<h4>验证说明</h4>
+<p>模型、实际回调的无窗口替身测试和安装回归见VALIDATION_EDITOR20_18.md。原生窗口视觉验收未执行，不声称界面实测通过。ACP后缀与UTF-8 JSON数据结构保持兼容。</p>
+<hr />
+<h3>Beta 20.17</h3>
+<p>名称、子段编号和旧路线编号入口统一为“基本 → 路线编号”。未分段时编辑整条路线，名称与编号同步；已分段时通过“选择子段”选择编辑范围，“路线编号”仅修改该子段。原名称、designation字段不再重复展示。路线编辑的改号操作继续兼容同一逻辑数据。</p>
+<p>移除滑行道“快速脱离道”重复勾选框，保留“类型”下拉框作为类型入口，旧工程的快速脱离道数据不删除。</p>
+<p>属性选择夹适应右侧栏可用高度，仅内部页面保留滚动条；路线编辑等没有选择夹的独立表单仍保留一条滚动条。多边形顶点拖动新增中线吸附，保持Shift方向/垂直吸附规则，自身对象不参与吸附。滑行道、服务车道等线性节点原有吸附继续有效。</p>
+<h3>Beta 20.16</h3>
+<p>修复切割后的逻辑子段无法在普通属性栏重新编号的问题。已分段路线选中后显示“当前逻辑子段编号 → 子段编号”，隐藏容易误操作的整条路线名称/编号字段。修改按稳定子段ID提交，只改变当前子段，不改相邻段或道面几何。</p>
+<p>使用：选择工具点击切割后的目标子段，右侧找到“当前逻辑子段编号”，输入新编号。普通视图、F6视图均可操作，位置标记和F6名称同步更新。同一实体内切换子段会重新加载对应属性；也可继续使用路线编辑中的独立改号。</p>
+<p>已输入的子段编号在切换对象前提交；目标子段已不存在时提示重新选择，不回退到整条对象改名。支持Ctrl+Z撤销。</p>
+<h3>Beta 20.15</h3>
+<p>纯名称修改不再提交坐标为几何编辑，也不清除原连接网络/组织信息。改号、合并选择、强制独立均保留原曲线、焊接端点及路口引导线。</p>
+<p>首尾合并：在合并编号界面勾选完整的两条滑行道。若中线端点相接（容差5cm），普通选择模式点击任一条会共同选择，保持各自几何与绑定对象，不重新采样或拼接道面。未首尾接触、交叉中间接入或未参与合并的岔路不自动加入。逻辑段的部分区间合并不提升为整条道面选择。</p>
+<p>强制独立：在路线编辑中选择“强制独立选中分支并命名”，点击目标分支，输入编号并确认。移除该分支的合并选择关系和自动组织容器，保留几何连接；此后可单独点选。对已分段的路线，仅为当前点选逻辑段设置编号。</p>
+<p>Ctrl多选：按住Ctrl点选追加对象，再次Ctrl点选取消。合并选择链作为一个选择单元，强制独立的分支单独选择；支持普通视图和F6视图。原有框选保留。</p>
+<h3>Beta 20.14</h3>
+<p>工具栏两个切割图标分别进入“保留编号逻辑分段”和“新编号逻辑分段”。通用路线编辑按钮仍默认独立改号。修复预览位置完整精度与属性框三位小数不一致导致无法确认的问题，属性使用九位小数，兼容旧框的0.5mm内舍入误差。</p>
+<p>切割操作：选择切割图标，点击中线预览切口；在同一切口附近再次点击，或按Enter，或点击右侧确认按钮提交。新编号切割会预填不重复的“原编号-数字”，可手动修改。第一次点击只预览；右键/Esc取消。提交显示段数，F6或路线编辑模式可见虚线段界；普通绘图不添加实体边线。</p>
+<p>分段仍是逻辑操作，不改变道面、中心线或交汇几何。同编号切割会形成两个逻辑段，但保留同一编号与颜色；段界可用于确认已提交。明显改变输入站位后仍必须先更新预览，防止提交错误位置。</p>
+<h3>Beta 20.13</h3>
+<p>修复“路线编辑：拆分 / 改号 / 截断 / 合并”按钮与旧切分入口冲突。所有通用入口打开后默认选择“本分支独立改号”，清空上一次切口和表单草稿，不再由旧回调强制切换到保留编号分段。</p>
+<p>修复修改名称时沿历史network_id批量传播的问题。普通属性中的名称修改只影响当前对象；路线编辑的改号只影响当前点选逻辑段。只有显式选择“合并编号”并确认勾选范围，才会修改多个选定段或分支；不会影响未选中的同网络分支。</p>
+<p>操作：点击路线编辑按钮，点击目标分支/段，核对当前段名后输入新编号并确认。要产生新编号区间，主动选择“逻辑分段：新段独立编号”，点击切口并确认。保留同一编号分段只保留编号，不会产生新名称，属于单独可选操作。</p>
+<h3>Beta 20.12</h3>
+<p>统一普通滑行道、机坪滑行道、机位滑行通道及“连接并预览”连接道的编号分段流程。分段与改名只改变逻辑区间，不拆开实体几何、曲线或交汇点。连接道现在也能分段、逐段命名、合并编号，并同步位置标记与F6分段名称。</p>
+<p>修复同一对象内点击另一逻辑段时，属性仍复用上一段名称的状态问题。切换区间时重新加载该段名称；切口预览仍与当前场景版本绑定，过期时拒绝提交。F6下连接道的分段操作不再被强制切换回普通选择。</p>
+<p>操作：进入“路线与编号”的分段模式，先选择“逻辑分段：新段独立编号”，点击切口位置，输入新编号后确认。选择“本分支独立改号”，点击具体逻辑段，核对当前段名后修改并确认。合并编号保留区间与几何。实体末端截断是单独操作；独立连接道的实体长度请通过端点编辑调整，可以在删除整条连接道时选择删除分支。</p>
+<h3>Beta 20.11</h3>
+<p>修复移动直线连接端点后，道肩条带重绘发生“TopologyException: found non-noded intersection”的错误。日志定位为道面求并集时的浮点交点拓扑问题。</p>
+<p>道肩条带的道面与道肩求并集统一采用0.0001m计算网格。其他共享求并集遇到同类拓扑异常时，会修复有效性后按该精度重算；不会忽略道面或将失败区域留空，也不改变工程坐标或直线/曲线类型。非拓扑异常继续正常报告。</p>
+<p>使用方式不变：选中直线连接并拖动端点，松手提交；端点调整后仍为直线，可使用Ctrl+Z撤销。</p>
+<h3>Beta 20.10</h3>
+<p>机位与吸附中线为绑定的独立对象。选择、框选显示或变换中线时，不再因为入口绑定而将机位加入整体。点击中线与机位引入线重叠处，优先选择中线，方便独立修改滑行道名称与编号；机位编号和机位组保持独立。</p>
+<p>入口位置绑定仍保留：移动或编辑中线后，机位入口随其站位更新，停止端不因绑定被整体平移。机位主动换线吸附、廊桥约束和机位内部子元素分组继续有效。用户明确创建的共同分组仍按照分组操作，不会被本次更新拆散。</p>
+<p>使用：选择工具点击滑行道中线，在属性修改名称/编号；F6模式下也可选择中线进行编号。点击机位引入线或在场景对象中选择机位，可独立编辑机位编号。两者的位置吸附不会形成自动分组。</p>
+<h3>Beta 20.9</h3>
+<p>F6彩色分段模式显示除冰坪完整中线，使用与正常绘图相同的除冰坪几何，并在退出F6时清除显示叠层。此功能不改变工程或导出几何。</p>
+<p>右下角坐标与像素/米比例读数实时更新：鼠标移动、节点或对象拖动、平移、滚轮缩放及视图重绘后均重新计算。坐标使用实际鼠标位置，不会被吸附预览位置替代。缩放、适应画面、导航窗口定位后，不需要额外移动鼠标刷新比例。相同读数不重复刷新控件。</p>
+<p>使用：按F6即可查看除冰坪中线。移动鼠标查看X/Y米制坐标，滚轮缩放或平移观察右下角px/m数值实时变化。</p>
+<h3>Beta 20.8</h3>
+<p>节点编辑支持Shift方向限制。线性对象（滑行道、服务车道、独立线条、连接道）的节点可吸附已有中线，内部折点也支持。Shift且靠近目标中线时，将正在调整线段的另一端投影到目标中线，得到垂直连接的节点位置；没有目标时按照鼠标方向选择水平、垂直、45度或原方向。曲线控制柄调整的是端点切向方向；不会将整条曲线强制变直。</p>
+<p>使用：选择节点编辑工具，拖动线性对象的顶点。直接拖动可吸附中线；按住Shift靠近目标中线，可让相邻调整线段垂直于该中线。编辑端点以另一端/相邻顶点为固定端，编辑曲线控制柄以对应曲线端点为基准。</p>
+<p>悬停顶点或入口/回位操纵点显示尺寸调整光标，圆角和语义控制点显示手形，连接曲线控制柄显示十字光标。离开操纵点后恢复普通光标。选择前不修改或吸附对象。</p>
+<p>廊桥回位点吸附加强约束：必须已有有效中线绑定；先将偏离的入口校正到原绑定中线，再调整方向和长度使回位圆对准廊桥头部。没有有效中线时提示先绑定，不提交不完整吸附。</p>
+<h3>Beta 20.7</h3>
+<p>引入线跨中线重新绑定：选中机位，拖动橙色入口连接点到另一条中线附近，预览自动切换目标，松手更新绑定。可吸附滑行道、机坪滑行道、跑道及独立连接道；未接近新中线时仍沿原中线移动。拖动整组机位时入口也可吸附其他中线。一次拖动可用一次Ctrl+Z撤销。</p>
+<p>几何顶点编辑：选择“节点编辑”工具，点击机坪、建筑、保护区、关闭区或区域标记，显示蓝色顶点方柄。拖动方柄预览新轮廓，松手提交；Shift限制方向，右键或Esc取消。自交多边形、建筑重叠会被拒绝。程序生成的除冰坪和掉头坪保留专用参数编辑，不直接修改其顶点。</p>
+<p>指廊长度：选择指廊，在属性中的“指廊尺寸”修改“指廊长度 m”。固定与航站楼主体相接的底边，移动另一端。关联廊桥按照原边和相对站位重新布置，保持廊桥宽度及长度，关联机位跟随其原有绑定规则；发生碰撞则撤回修改。直接修改建筑顶点不会自动重建附属构件，指廊伸缩请优先使用长度属性。</p>
+<h3>Beta 20.6</h3>
+<p>机位启用廊桥活动区后，选择机位或成套机位组，在回位圆中心显示绿色操纵点。拖动操纵点，以原入口连接点为固定端调整机位方向与长度；机位宽度、内部安全线斜率不随之缩放。靠近廊桥头部时显示绿色吸附预览，松手绑定。Shift限制拖动方向；右键或Esc取消，一次拖动可用一次Ctrl+Z撤销。若目标过近无法保持机位宽度或长度小于15m，则拒绝此次调整。普通整组平移吸附功能仍保留。</p>
+<p>通过此操纵点绑定后，移动廊桥会重新调整机位方向与长度，并保持滑行道入口位置不变。DEMO中101、103、105、107和201廊桥机位已重新放置并建立绑定。</p>
+<h3>Beta 20.5</h3>
+<p>修复成套机位以组为选中对象时，拖动无法触发廊桥吸附的问题。预览与提交使用同一个吸附结果：回位圆接近廊桥头部后，整组平移并保持机位内部尺寸不变。吸附优先于入口中线绑定，避免提交时把引入点拉回原处导致机位变形。</p>
+<p>使用方法：开启机位的“移动时吸附廊桥”，拖动选择框边框，使活动区的回位圆靠近廊桥头部，出现粉色吸附圆后松手。也可在机位或成套机位组的属性页点击“整套机位对准最近廊桥”直接对准。自动吸附半径为18屏幕像素且不小于2米。绑定后移动廊桥会带动机位；整体平移离开滑行道时解除原入口绑定。</p>
+<p>机坪内服务车道与滑行道重叠时，优先显示服务车道底色，支持自定义底色，不影响上层标线与引导线。跑道底色仍保留优先级。</p>
+<p>20.4：修正廊桥吸附。以机位原有回位圆为吸附锚点，将整套机位及手工子元素平移到廊桥头部；保持机位尺寸、方向、内部相对位置不变。移动廊桥时整套机位跟随。拖动预览也使用同一锚点，不再单独移动回位圆或只移动机位末端。若整体平移使引入点离开原滑行道，解除该入口绑定，避免机位被拉伸。</p>
+<p>使用：开启机位属性中的移动时吸附廊桥，拖动机位，使原有回位圆接近廊桥头部后松开。</p>
+<h3>Beta 20.4 · 连接道编辑补充</h3>
+<p>普通视图或 F6 彩色分段视图中，使用选择或节点编辑工具点击连接道中线，可独立选择该连接道。拖动端点可沿所连道面的中线调整交汇位置；拖动粉色控制柄可调整曲率。在属性页修改独立编号，或选择“改为直线 / 恢复曲线”。直线没有曲率手柄，移动端点仍保持直线；需要弯曲时先选择“恢复曲线”。旧式附属连接的几何仍属于对应分支滑行道，编辑其端点或控制柄会同步更新该分支道面。</p>
+<p>F6 下选择“连接并预览”，先点击起点中线，再移向目标中线，显示粉色预览与终点吸附圆，第二次点击确认。右键取消。连接预览开关也适用于此模式。</p>
+<p>廊桥吸附以机位活动区内原有回位圆中心为锚点，平移整套机位，圆心与廊桥头部重合。不会单独移动回位圆，不改变机位长度、方向或内部相对位置。此前为机位末端预留的廊桥偏移参数已从属性页移除。</p>
+<p>选择子段：若画面中子段较短或难以点选，可在右侧“当前逻辑子段编号”中使用“选择子段”下拉框，切换到目标子段，再编辑“子段编号”。下拉选择只改变编辑目标，不修改工程几何或创建撤销记录。</p>
+<h3>Beta 20.3</h3>
+<ul>
+<li>增大主体和廊桥编号字体。</li>
+<li>公共分界线单独绘制为虚线，外边界保留实线。</li>
+<li>主体形状列表中文化，保存值仍使用兼容的内部代码。</li></ul>
+<p>补充：机位吸附廊桥后，自动显示廊桥活动区，回位圆中心对准廊桥头部；移动廊桥后同步更新，解除绑定后恢复普通回位点定位。</p>
+<h3>Beta 20.2</h3>
+<ul>
+<li>从实际错误日志确认并切断预览重绘与鼠标回调循环；无副作用重投影及重入保护。</li>
+<li>STRAIGHT 优先于旧控制点和沿线标志，保存曲线供恢复；增加直线／曲线按钮。</li>
+<li>联络道左右强制性指令标志成对生成，窄道面项目选择保留审阅。</li>
+<li>F6 线条、编号文字携带连接对象标识，可点选并修改独立编号。</li></ul>
+<h3>Beta 20.1</h3>
+<ul>
+<li>修复 editor20_gui 从未导出 PALETTE 的 editor17_gui 导入调色板导致 F6 报错。</li>
+<li>补充完整 F6 切换回调测试，覆盖圆角连接、连接道编号与连续往返切换。</li></ul>
+<h3>Beta 20.0</h3>
+<ul>
+<li>修复增强中线沿隐藏直角端头绘制：改用可见圆角拓扑，支持直接点击转弯弧线，F6 同步。</li>
+<li>新增橙色机位入口站位连接点，沿绑定中线移动并保留停止端；支持连接道中线作为机位／机库父轴。</li>
+<li>统一临时预览清理、世界坐标重投影和预览开关；取消过期属性回调覆盖。</li>
+<li>廊桥预览及审阅新增设计机型间距告警。</li>
+<li>NO ENTRY 菜单与顶栏工具，检查各位置最大尺寸和最窄处后统一，保留指标与按需适配两种方式。</li>
+<li>交叉跑道瞄准点成对、接地带整组避让，保留审阅记录，避免碎块。</li>
+<li>机坪内滑行道、连接道、补角默认继承机坪颜色，提供独立编号及 F6 标注。</li>
+<li>补齐新工具图标，顶栏操作图标透明；模式提示移到右上角。</li>
+<li>更新完整 DEMO、专用回归案例、说明、安装清单和验证报告。</li></ul>
+<h3>Beta 19.0</h3>
+<ul>
+<li>合入 F6 双模式角落提示，并在彩色模式标注跑道两端编号。</li>
+<li>工具、场景对象搜索；选择之前不吸附，创建／拖动时吸附。</li>
+<li>修复逻辑分段位置标志的编辑覆盖顺序、文字站位偏移和名称刷新；成套组名同步。</li>
+<li>增强中线按距离传播到分支、跨等待位置截断、路口侧虚线中断、汇聚连续段及整体黑底；新增指定长度绘制工具。</li>
+<li>NO ENTRY 机场统一尺寸与超界审阅，停字红底，MAX SPAN 黑／透明底色，廊桥 45°阴影、白色回位点。</li>
+<li>带编号辅助机位 A/B/C/D 预制，机库屋顶示意。</li>
+<li>航站楼五种主体、边缘挤出指廊、等距垂直廊桥、重叠拒绝、统一位数顺逆时针编号、机位吸附绑定、道面穿越警告。</li>
+<li>道肩条带共享整场道肩缓冲几何，去除逐条重算；参考旧算法逐顶点比较绘制结果相同。</li>
+<li>更新完整案例、形状案例、图示、说明和安装清单。</li></ul>
+<h3>Beta 18.0（原 Editor18）</h3>
+<p>分段改为同一物理路线上的逻辑区间；消除对曲线/路口/道肩的重构；左键直接更新预览；鼠标移动只画预览；空间索引与F6轮廓缓存；新增删除整条岔路并清理恢复备份；逻辑段命名/合并/标志与恢复映射；服务车道保护范围特殊线附加延伸；道肩条带不因直线上的服务车道交叉角而误生。</p>
+<h3>Beta 17.0（原 Editor17）</h3>
+<p>彩色编号变为F6独立显示，不再替换普通渲染缓存；固定屏幕字号显示名称；统一分段、改号、截断、合并和恢复流程；修正图例覆盖name变量导致的str.get报错；横道旋转入口统一为偏斜；跑道标志裁切包括手工关联对象与底纹；整体道肩条带裁切；无引导停止标志可扩展安全线容纳；机坪滑行道道路交汇等待标志。</p>
+<h3>Beta 16.0（原 Editor16）</h3>
+<p>修正无引导停止线 X 距离及机型标签间隙；平滑旧编号牌附近的引入线过渡；保留完整属性组父级；修复终点侧截断与选择框刷新；倾斜横道预览隐藏旧图形；新增简化着色的分支独立编号及切分视图。</p>
+<h3>Beta 15.1 · 属性面板热修复</h3>
+<p>修复选择组件时分页颜色区空容器触发max()异常；颜色按钮位于对应字段所在页。统一安全行号计算，保护比例尺浮点边界。其他功能保持15版。</p>
+<h3>Beta 15.0（原 Editor15）</h3>
+<ul>
+<li>高清透明图标源和16/24/32/48/64/128/256像素原生尺寸，导航关闭按钮和比例尺底纹优化。</li>
+<li>选择框边框空段自由移动，方柄同比例缩放保持斜线斜率，独立圆柄旋转；机位控制点支持Shift约束。</li>
+<li>主体移动持续绑定原滑行道，手动入口点按可调阈值吸附/脱离；编号沿完整曲线轴对称移动，按标牌形状统一动态裁线。</li>
+<li>所有组件属性分类分页、每页滚动；审阅窗口双向滚动；Markdown说明渲染并配图；窗口根据可用工作区打开。</li>
+<li>横道倾斜改为剪切与菱形手柄，条纹保持道路方向；辅助机位可选四种引入构型；除冰坪中线吸附提示增强。</li>
+<li>导出取消固定尺寸上限，超额仅警告；后台快照绘制，状态栏进度和临时文件完整写入。</li>
+<li>截断保留曲线控制，圆角考虑道面半宽；快速脱离道补等待位置和增强中线，DEMO更新当前已施行标准。</li></ul>
+<h3>Beta 14.0（原 Editor14）</h3>
+<ul>
+<li>机位引入线改为入口、弯折和共享交汇点的语义拖动，不再引导直接编辑每个曲线柄。</li>
+<li>编号沿引入弧线移动、切线转向和配对同步，引导线随编号重新避让。</li>
+<li>机位移动可选中线吸附；长度修改保留原入口；新建引入半径初值35m。</li>
+<li>外框边缘和八个方柄缩放，独立圆柄旋转，中心十字移动，预览松手提交。</li>
+<li>人行横道排列方向修正，增加真实条纹预览；比例尺恢复并提供米/英尺显示。</li>
+<li>核对无引导停止标志2m短横、6m侧横、X偏置及STOP文字，机型文字对齐横线。</li>
+<li>新增2/3套平行或非平行组合机位，主辅线型、L/R编号及中心/两侧互斥关系。</li>
+<li>除冰坪底色自动同步包含机坪或连接滑行道，保留手动覆盖选项。</li>
+<li>等待位置默认覆盖道面与道肩；末端截断明确选择截去起点侧或终点侧。</li>
+<li>修复机位安全线拐角接缝和机坪开口残留滑行道边线。</li>
+<li>PNG/SVG导出增加分辨率、范围、DPI、透明和图层选项。</li>
+<li>应用新PNG/ICO图标、更新默认示例及软件和使用说明。</li></ul>
+<h3>Beta 13.0（原 Editor13）</h3>
+<ul>
+<li>机位小头直颈默认15m，延长时固定斜边；廊桥区贴边纵向展开，作业区镜像放置。</li>
+<li>成套机位使用实际组织组；支持程序化子元素独立操作及转换为普通组内子对象。</li>
+<li>A/B/C/D引导分支增加端点和曲率手柄，共用交汇点联动。</li>
+<li>修复快速出口跑道侧延伸方向，接收端反向分支增加两侧NO ENTRY。</li>
+<li>服务车道连续弯道统一圆角，恢复吸附整幅道面的人行横道及偏斜编辑。</li>
+<li>修复入口内移横线白色/黑边顺序、号码黑边与进入线层级、桩井白边。</li>
+<li>中心圆随跑道宽度取外缘半径W/4，附近中线留可调净空。</li>
+<li>关闭道面裁掉进入引导线；A型等待标志默认仅道面宽，并保留含道肩选项及标准差异审阅。</li>
+<li>新增滑行道路口末端设置及恢复。</li>
+<li>工程保存后缀改为ACP，保留JSON结构和旧格式读取。</li>
+<li>新增完整软件介绍、功能/使用手册及每版文档维护检查。</li>
+<li>验证范围与窗口测试拦截情况详见VALIDATION_EDITOR13.md，不宣称全部窗口测试通过。</li></ul>
+<h3>Beta 12.0（原 Editor12）</h3>
+<p>修复引入线及机位安全线颈部，增加除冰等待坪参考构形、中心圆开关、临时入口箭头列、单点圆角手柄、明显框选区域和机位保障标记。</p>
+<h3>Beta 11.0（原 Editor11）</h3>
+<p>修复三栏布局、机位整套移动、整体黑色底纹、跑道端道肩切平、Shift智能方向选择及滑行道名称合并。</p>
+<h3>Beta 10.0（原 Editor10）</h3>
+<p>预制道面工具、独立工具栏、鼠标与 Shift 约束、快速脱离道拟合、A/B/C/D 机位引入、跑道标志图层、服务车道路口和车道端点操作。来源为 <span style=" font-family:'monospace';">README_EDITOR10.md</span>。</p>
+<h3>Beta 9.0（原 Editor9）</h3>
+<p>修复现有弯道及交叉道面内的连接，完善四种机位引入构型、斜折机位安全线、相邻交叉区、推出路径与最大翼展。来源为 <span style=" font-family:'monospace';">README_EDITOR9.md</span> 和 <span style=" font-family:'monospace';">BUG_REVIEW_EDITOR9.md</span>。</p>
+<h3>Beta 8.0（原 Editor8）</h3>
+<p>校正 B 型等待位置、跑道中线虚线、关闭 X、VOR、内移入口、限速、尾流和井盖；完善廊桥区避让、无引导停止标志、标志尺寸审阅与输入验证。来源为 <span style=" font-family:'monospace';">README_EDITOR8.md</span>。</p>
+<h3>Beta 7.0（原 Editor7）</h3>
+<p>B 型等待位置每组两条短线，虚线按世界坐标显示，视口裁剪和矢量字形优化缩放。加入滑行道分段、导航窗、实时比例尺和动态网格。来源为 <span style=" font-family:'monospace';">README_EDITOR7.md</span>。</p>
+<h3>Beta 6.0（原 Editor6）</h3>
+<p>增加框选和批量编辑、滑行道中线吸附预览、连接分支控制柄、引导线黑边、中间等待位置和 B 型等待位置。区分停止道与入口前不适用铺筑面，完善掉头坪、道肩条带和路口边线。来源为 <span style=" font-family:'monospace';">README_EDITOR6.md</span>。</p>
+<h3>Beta 5.0（原 Curve 5.0）</h3>
+<p>将路口控制落实到曲线几何。T 形口在转弯切点截断引导线，穿越跑道的直行中线继续保留；快速出口分叉内部补承重道面，普通连接按空间和双向条件补反向支路。来源为 <span style=" font-family:'monospace';">README_CURVE.md</span>。</p>
+<h3>Beta 4.0（原 Precision 4.0）</h3>
+<p>修复放大显示与滑行道智能接入，计算有限道面可容纳的出口角、半径和直线长度。引入机坪设备、廊桥活动区、作业等待区、桩井和机位安全线交叉样式。来源为 <span style=" font-family:'monospace';">README_PRECISION.md</span>。</p>
+<h3>Beta 3.0（原实时编辑 3.0）</h3>
+<p>建立层级树和拖放归属，支持自动标记跟随、独立编辑或分离成对象。扩展跑道、滑行道、机位、推出和等待位置的自动标记。来源为 <span style=" font-family:'monospace';">README_LIVE.md</span>。</p>
+<h3>Beta 2.0（原 Airport Canvas 2.0）</h3>
+<p>形成三栏所见即所得工作区，提供分类绘制工具、控制点、实时属性、撤销重做和道面中轴吸附。来源为 <span style=" font-family:'monospace';">README_WYSIWYG.md</span>。</p>
+<h3>Beta 1.0（原机场场面编辑器 GUI）</h3>
+<p>首代 Tkinter 编辑器；可调整对象与交汇、配置机位及关闭情景、预览受限路线和输出图形与报告。来源为 <span style=" font-family:'monospace';">README_GUI.md</span> 的早期章节。具体编号与日期待核实。</p>
+<h2 id="history-5">Alpha · Runway_Generator</h2>
+<h3>Alpha 0.2 · 生成器修复版</h3>
+<p>保留 JSON 命令行输入及 PNG 绘制，完善跑道号与磁航向、两端入口和着陆距离解析、航向旋转、外接画布、字体路径与尺寸校验。报告标出待核验范围。来源为本地 <span style=" font-family:'monospace';">Runway_Generator/README.md</span>、<span style=" font-family:'monospace';">test_generator.py</span> 及 2026-11-17 的修复包会话。</p>
+<h3>Alpha 0.1 · 原始生成器</h3>
+<p>早期 <span style=" font-family:'monospace';">runway.py</span>、<span style=" font-family:'monospace';">taxiway.py</span> 与 <span style=" font-family:'monospace';">turn_pad.py</span> 读取配置并生成二维道面和标志图。留存文件包括 <span style=" font-family:'monospace';">test.json</span>、<span style=" font-family:'monospace';">mrb.json</span>、<span style=" font-family:'monospace';">txtest.json</span> 与 <span style=" font-family:'monospace';">runway.png</span>。原始发布编号与确切日期待核实。</p>
+<h2 id="history-6">档案依据</h2>
+<ul>
+<li>Alpha 和早期 Beta：<span style=" font-family:'monospace';">E:/不常用/MySoftware/AC/Runway_Generator</span> 的脚本、README 和早期 GUI 备份。</li>
+<li>Beta 中后期：<span style=" font-family:'monospace';">E:/不常用/MySoftware/AC/Runway_Generator_fixed</span> 的各版 README、更新记录、示例和验证说明。</li>
+<li>Pre：<span style=" font-family:'monospace';">E:/不常用/MySoftware/AC/Airport_Canvas_Editor21_PySide</span> 的源码、备份目录和各备份内的更新记录。旧 21.0–21.5 的六个备份均带有 20261119 日期。</li>
+<li>Ver：<span style=" font-family:'monospace';">E:/不常用/MySoftware/AC/AirportCanvas_v1_0_Windows_Build</span>、仓库 <span style=" font-family:'monospace';">release/</span>、Windows 打包会话、1.0.1 修补会话、1.2 改号和英文补译记录。仓库可见 Git 历史从 2026-11-21 起。</li></ul>
+<h2 id="history-7">Pre 26.1 备份索引</h2>
+<p>下表共 126 个备份，按目录原始时间戳排列。文件列展示每次备份保存的部分文件。更新编号表示该备份的日志首次可见的条目。破折号表示该处没有首次出现的日志标题，目录仍可用于比对源码。备份目录可能只含被替换文件。</p>
+<table><tr>
+<th scope="col">
+<p><span style=" font-weight:700;">Pre 26.1 索引</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">原备份目录</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">文件数</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">首见更新编号（Pre）</span></p></th>
+<th scope="col">
+<p><span style=" font-weight:700;">部分归档文件</span></p></th></tr>
+<tr>
+<td>
+<p>b001</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_005048_623410</span></p></td>
+<td>
+<p align="right">2</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">scene_render.py</span></p></td></tr>
+<tr>
+<td>
+<p>b002</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_005407_085045</span></p></td>
+<td>
+<p align="right">3</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">editor11_gui.py</span>, <span style=" font-family:'monospace';">editor19_gui.py</span>, <span style=" font-family:'monospace';">editor_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b003</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_012947_978590</span></p></td>
+<td>
+<p align="right">25</p></td>
+<td>
+<p>26.1.1</p></td>
+<td>
+<p><span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">directions20_18.py</span>, <span style=" font-family:'monospace';">editor11_gui.py</span>, <span style=" font-family:'monospace';">editor17_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b004</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_015250_574785</span></p></td>
+<td>
+<p align="right">38</p></td>
+<td>
+<p>26.1.2</p></td>
+<td>
+<p><span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">directions20_18.py</span>, <span style=" font-family:'monospace';">editor10_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b005</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_021745_400576</span></p></td>
+<td>
+<p align="right">47</p></td>
+<td>
+<p>26.1.3</p></td>
+<td>
+<p><span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">demo_airfield.py</span>, <span style=" font-family:'monospace';">directions20_18.py</span></p></td></tr>
+<tr>
+<td>
+<p>b006</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_030208_850025</span></p></td>
+<td>
+<p align="right">55</p></td>
+<td>
+<p>26.1.4</p></td>
+<td>
+<p><span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">demo_airfield.py</span></p></td></tr>
+<tr>
+<td>
+<p>b007</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_032417_328344</span></p></td>
+<td>
+<p align="right">57</p></td>
+<td>
+<p>26.1.5</p></td>
+<td>
+<p><span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">demo_airfield.py</span></p></td></tr>
+<tr>
+<td>
+<p>b008</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_033312_183866</span></p></td>
+<td>
+<p align="right">60</p></td>
+<td>
+<p>26.1.6</p></td>
+<td>
+<p><span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">demo_airfield.py</span></p></td></tr>
+<tr>
+<td>
+<p>b009</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_034334_822373</span></p></td>
+<td>
+<p align="right">63</p></td>
+<td>
+<p>26.1.7</p></td>
+<td>
+<p><span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">demo_airfield.py</span></p></td></tr>
+<tr>
+<td>
+<p>b010</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_035111_192453</span></p></td>
+<td>
+<p align="right">65</p></td>
+<td>
+<p>26.1.8</p></td>
+<td>
+<p><span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">demo23.py</span>, <span style=" font-family:'monospace';">demo_airfield.py</span></p></td></tr>
+<tr>
+<td>
+<p>b011</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_131841_982959</span></p></td>
+<td>
+<p align="right">75</p></td>
+<td>
+<p>26.1.9</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">curve_model.py</span></p></td></tr>
+<tr>
+<td>
+<p>b012</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_133329_489612</span></p></td>
+<td>
+<p align="right">78</p></td>
+<td>
+<p>26.1.10</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">curve_model.py</span></p></td></tr>
+<tr>
+<td>
+<p>b013</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_135741_694531</span></p></td>
+<td>
+<p align="right">79</p></td>
+<td>
+<p>26.1.11</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span>, <span style=" font-family:'monospace';">curve_model.py</span></p></td></tr>
+<tr>
+<td>
+<p>b014</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_141305_496962</span></p></td>
+<td>
+<p align="right">86</p></td>
+<td>
+<p>26.1.12, 26.1.13</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b015</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_142050_199025</span></p></td>
+<td>
+<p align="right">88</p></td>
+<td>
+<p>26.1.14</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b016</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_142723_039152</span></p></td>
+<td>
+<p align="right">89</p></td>
+<td>
+<p>26.1.15</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b017</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_143652_151094</span></p></td>
+<td>
+<p align="right">90</p></td>
+<td>
+<p>26.1.16</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b018</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_143717_257711</span></p></td>
+<td>
+<p align="right">91</p></td>
+<td>
+<p>26.1.17</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">curve_gui.py</span></p></td></tr>
+<tr>
+<td>
+<p>b019</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_145823_182821</span></p></td>
+<td>
+<p align="right">92</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">connection9.py</span></p></td></tr>
+<tr>
+<td>
+<p>b020</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_150549_861956</span></p></td>
+<td>
+<p align="right">93</p></td>
+<td>
+<p>26.1.18</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">connection9.py</span></p></td></tr>
+<tr>
+<td>
+<p>b021</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_150912_527672</span></p></td>
+<td>
+<p align="right">94</p></td>
+<td>
+<p>26.1.19</p></td>
+<td>
+<p><span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span>, <span style=" font-family:'monospace';">connection9.py</span></p></td></tr>
+<tr>
+<td>
+<p>b022</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_151920_951838</span></p></td>
+<td>
+<p align="right">96</p></td>
+<td>
+<p>26.1.20</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">boards24.py</span>, <span style=" font-family:'monospace';">connection20_2.py</span></p></td></tr>
+<tr>
+<td>
+<p>b023</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_192401_103447</span></p></td>
+<td>
+<p align="right">100</p></td>
+<td>
+<p>26.1.21</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b024</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_192556_989273</span></p></td>
+<td>
+<p align="right">0</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p>以原备份目录清单为准</p></td></tr>
+<tr>
+<td>
+<p>b025</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_200105_088246</span></p></td>
+<td>
+<p align="right">105</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b026</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_200541_057323</span></p></td>
+<td>
+<p align="right">0</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p>以原备份目录清单为准</p></td></tr>
+<tr>
+<td>
+<p>b027</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_202852_989842</span></p></td>
+<td>
+<p align="right">107</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b028</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_212535_437346</span></p></td>
+<td>
+<p align="right">108</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b029</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_212559_882895</span></p></td>
+<td>
+<p align="right">109</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b030</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_212626_276956</span></p></td>
+<td>
+<p align="right">110</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b031</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_213812_466879</span></p></td>
+<td>
+<p align="right">111</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b032</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_215345_181184</span></p></td>
+<td>
+<p align="right">112</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b033</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_222622_386388</span></p></td>
+<td>
+<p align="right">117</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b034</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_222936_307677</span></p></td>
+<td>
+<p align="right">119</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b035</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_223226_286296</span></p></td>
+<td>
+<p align="right">120</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b036</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_223511_273242</span></p></td>
+<td>
+<p align="right">121</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b037</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_223919_242033</span></p></td>
+<td>
+<p align="right">122</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b038</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_233148_318165</span></p></td>
+<td>
+<p align="right">125</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b039</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_233259_715786</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b040</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_233817_054262</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b041</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_234148_001411</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b042</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261120_235931_945660</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b043</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_001119_338212</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b044</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_004724_027735</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b045</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_005319_663450</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b046</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_010032_995413</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b047</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_011535_166393</span></p></td>
+<td>
+<p align="right">128</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b048</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_011915_963680</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b049</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_012637_090711</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b050</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_013212_976539</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b051</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_021558_465526</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b052</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_022111_870915</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b053</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_022152_878774</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b054</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_024539_203847</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b055</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_024653_428288</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b056</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_025333_180523</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b057</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_030748_206238</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b058</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_030930_937601</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b059</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_031336_714373</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b060</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_031433_042183</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b061</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_031741_723741</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b062</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_032126_336720</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b063</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_032352_226129</span></p></td>
+<td>
+<p align="right">129</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b064</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_033542_194110</span></p></td>
+<td>
+<p align="right">130</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b065</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_033858_792233</span></p></td>
+<td>
+<p align="right">130</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b066</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_043949_613736</span></p></td>
+<td>
+<p align="right">131</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b067</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_135620_900248</span></p></td>
+<td>
+<p align="right">131</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b068</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_135652_640889</span></p></td>
+<td>
+<p align="right">132</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b069</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_140207_827250</span></p></td>
+<td>
+<p align="right">132</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b070</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_140939_402265</span></p></td>
+<td>
+<p align="right">132</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b071</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_141654_112792</span></p></td>
+<td>
+<p align="right">132</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b072</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_144356_954178</span></p></td>
+<td>
+<p align="right">132</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b073</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_150247_865947</span></p></td>
+<td>
+<p align="right">134</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b074</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_151332_417124</span></p></td>
+<td>
+<p align="right">134</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b075</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_151441_855634</span></p></td>
+<td>
+<p align="right">134</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b076</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_152019_818080</span></p></td>
+<td>
+<p align="right">134</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b077</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_152831_354998</span></p></td>
+<td>
+<p align="right">134</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b078</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_153058_768635</span></p></td>
+<td>
+<p align="right">134</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b079</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_153117_610298</span></p></td>
+<td>
+<p align="right">134</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b080</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_153312_530222</span></p></td>
+<td>
+<p align="right">135</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b081</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_153602_924340</span></p></td>
+<td>
+<p align="right">135</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b082</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_153614_514061</span></p></td>
+<td>
+<p align="right">135</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b083</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_154436_868318</span></p></td>
+<td>
+<p align="right">135</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b084</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_154731_006464</span></p></td>
+<td>
+<p align="right">135</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b085</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_155722_971025</span></p></td>
+<td>
+<p align="right">136</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b086</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_155907_777432</span></p></td>
+<td>
+<p align="right">136</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b087</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_160138_099038</span></p></td>
+<td>
+<p align="right">136</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b088</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_161018_116341</span></p></td>
+<td>
+<p align="right">137</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b089</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_162823_162216</span></p></td>
+<td>
+<p align="right">137</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b090</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_163156_700501</span></p></td>
+<td>
+<p align="right">137</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b091</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_165050_163423</span></p></td>
+<td>
+<p align="right">137</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b092</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_165141_284034</span></p></td>
+<td>
+<p align="right">138</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b093</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_170130_210824</span></p></td>
+<td>
+<p align="right">139</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b094</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_170522_023187</span></p></td>
+<td>
+<p align="right">139</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b095</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_170558_811655</span></p></td>
+<td>
+<p align="right">140</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b096</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_170744_747184</span></p></td>
+<td>
+<p align="right">140</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b097</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_170947_010320</span></p></td>
+<td>
+<p align="right">140</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b098</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_171001_541749</span></p></td>
+<td>
+<p align="right">140</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b099</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_171401_224557</span></p></td>
+<td>
+<p align="right">140</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b100</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_172210_203853</span></p></td>
+<td>
+<p align="right">141</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b101</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_172632_667885</span></p></td>
+<td>
+<p align="right">141</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b102</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_172953_932522</span></p></td>
+<td>
+<p align="right">141</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b103</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_180641_581634</span></p></td>
+<td>
+<p align="right">142</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b104</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_182239_860846</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>26.1.22</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b105</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_183022_339612</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>26.1.23</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b106</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_183044_867121</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>26.1.24</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b107</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_183118_020724</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b108</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_184734_786312</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>26.1.25</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b109</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_185311_516723</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>26.1.26</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b110</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_185716_820805</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>26.1.27</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b111</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_191338_901036</span></p></td>
+<td>
+<p align="right">146</p></td>
+<td>
+<p>26.1.28</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b112</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_192227_445845</span></p></td>
+<td>
+<p align="right">147</p></td>
+<td>
+<p>26.1.29, 26.1.30</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b113</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_192424_381078</span></p></td>
+<td>
+<p align="right">147</p></td>
+<td>
+<p>26.1.31</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b114</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_192730_934080</span></p></td>
+<td>
+<p align="right">147</p></td>
+<td>
+<p>26.1.32</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b115</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_193239_134681</span></p></td>
+<td>
+<p align="right">147</p></td>
+<td>
+<p>26.1.33</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b116</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_194123_630532</span></p></td>
+<td>
+<p align="right">147</p></td>
+<td>
+<p>26.1.34</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b117</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_194658_175761</span></p></td>
+<td>
+<p align="right">148</p></td>
+<td>
+<p>26.1.35</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b118</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_195133_754146</span></p></td>
+<td>
+<p align="right">148</p></td>
+<td>
+<p>26.1.36</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b119</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_195231_273725</span></p></td>
+<td>
+<p align="right">148</p></td>
+<td>
+<p>26.1.37, 26.1.38</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b120</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_195342_874244</span></p></td>
+<td>
+<p align="right">148</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b121</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_220209_545394</span></p></td>
+<td>
+<p align="right">148</p></td>
+<td>
+<p>26.1.39</p></td>
+<td>
+<p><span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span>, <span style=" font-family:'monospace';">bitmap_layers46.py</span>, <span style=" font-family:'monospace';">boards24.py</span></p></td></tr>
+<tr>
+<td>
+<p>b122</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_222818_133702</span></p></td>
+<td>
+<p align="right">152</p></td>
+<td>
+<p>26.1.40, 26.1.41, 26.1.42</p></td>
+<td>
+<p><span style=" font-family:'monospace';">AirportCanvas_en.qm</span>, <span style=" font-family:'monospace';">AirportCanvas_en.ts</span>, <span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span></p></td></tr>
+<tr>
+<td>
+<p>b123</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_223323_506555</span></p></td>
+<td>
+<p align="right">152</p></td>
+<td>
+<p>26.1.43</p></td>
+<td>
+<p><span style=" font-family:'monospace';">AirportCanvas_en.qm</span>, <span style=" font-family:'monospace';">AirportCanvas_en.ts</span>, <span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span></p></td></tr>
+<tr>
+<td>
+<p>b124</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_224350_807235</span></p></td>
+<td>
+<p align="right">152</p></td>
+<td>
+<p>26.1.44</p></td>
+<td>
+<p><span style=" font-family:'monospace';">AirportCanvas_en.qm</span>, <span style=" font-family:'monospace';">AirportCanvas_en.ts</span>, <span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span></p></td></tr>
+<tr>
+<td>
+<p>b125</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_224638_518527</span></p></td>
+<td>
+<p align="right">153</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">AirportCanvas_en.qm</span>, <span style=" font-family:'monospace';">AirportCanvas_en.ts</span>, <span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span></p></td></tr>
+<tr>
+<td>
+<p>b126</p></td>
+<td>
+<p><span style=" font-family:'monospace';">backup_21_6_20261121_224936_903016</span></p></td>
+<td>
+<p align="right">153</p></td>
+<td>
+<p>—</p></td>
+<td>
+<p><span style=" font-family:'monospace';">AirportCanvas_en.qm</span>, <span style=" font-family:'monospace';">AirportCanvas_en.ts</span>, <span style=" font-family:'monospace';">airport_scene.py</span>, <span style=" font-family:'monospace';">apron_ops20_18.py</span>, <span style=" font-family:'monospace';">automatic_markings.py</span></p></td></tr></table>
+<footer><a href="./Airport-Canvas-1.2-Tutorial.html">阅读 v1.2 图文教程</a> · <a href="https://github.com/RXLX-CHINA/Airport-Canvas/releases">GitHub 发行版</a></footer></main></body></html>

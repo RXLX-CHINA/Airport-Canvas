@@ -10,7 +10,63 @@ def envelope(a,scene):
         d['neck_start']=d['wing']+(d['wide']-d['narrow'])/a['props']['safety_slope15'];d['nose_end']=d['neck_start']+max(.5,a['props'].get('safety_neck',15.))
     return d
 
+GA_FIELDS = {
+    'ga_text': ('引入侧框内文字', ''),
+    'ga_text_color': ('文字颜色', '#ffffff'),
+    'ga_frame_color': ('线框颜色', '#ff0000'),
+    'ga_outline_color': ('线框描边颜色', '#ffff00'),
+}
+
+
+def ga_stand_props():
+    return dict(ga_stand=True, remote_stand=True, has_bridge=False, stand_support=False,
+                **{key: default for key, (_, default) in GA_FIELDS.items()})
+
+
+def ga_color(props,key):
+    import re
+    value = props.get(key,'')
+    return value if re.fullmatch(r'#[0-9a-fA-F]{6}',str(value)) else GA_FIELDS[key][1]
+
+
+def ga_labels(a):
+    props = a['props']
+    corners = safety(None,a)
+    oid = a['id']
+    edge = [(x+y)/2 for x,y in zip(corners[0],corners[1])]
+    axis = g.unit(*a['points'][-2:])
+    height = min(max(.5,props.get('number_height',4)),g.distance(corners[0],corners[1])/4,
+                 g.distance(corners[0],corners[-1])/4)
+    angle = (math.degrees(math.atan2(axis[1],axis[0]))+180)%180-90
+    entries = [(props.get('ga_text',''),height)]
+    if props.get('show_number',True):
+        entries.append((props.get('stand_number') or a['name'],-height))
+    for value,offset in entries:
+        if value:
+            point = [edge[i]+axis[i]*offset for i in (0,1)]
+            size = min(height,g.distance(corners[0],corners[1])/len(str(value)))
+            yield dict(type='text',oid=oid,points=[point],text=str(value),fill=ga_color(props,'ga_text_color'),
+                       size=size,rotation=angle,world_text=True,font='hei')
+
+
+def helicopter_stand_props():
+    return dict(helicopter_stand=True,has_bridge=False,stand_support=False,show_safety=True)
+
+
 def safety(scene,a):
+    props = a['props']
+    if props.get('helicopter_stand'):
+        x,y=a['points'][-1]
+        radius=max(1,props.get('aircraft_span',12)*.65)
+        return [[x+radius*math.cos(i*math.tau/64),y+radius*math.sin(i*math.tau/64)] for i in range(64)]
+    if props.get('ga_stand'):
+        end = a['points'][-1]
+        u = g.unit(*a['points'][-2:])
+        v = (-u[1],u[0])
+        length = max(1,props.get('aircraft_length',40))/2
+        width = max(1,props.get('aircraft_span',36))/2
+        return [[end[k]+x*u[k]+y*v[k] for k in (0,1)] for x,y in
+                ((-length,-width),(-length,width),(length,width),(length,-width))]
     d=envelope(a,scene);q=a['points'][-1];_,u,v=frame(a)
     pts=[(d['tail'],-d['wide']),(d['wing'],-d['wide']),(d['neck_start'],-d['narrow']),(d['nose_end'],-d['narrow']),
          (d['nose_end'],d['narrow']),(d['neck_start'],d['narrow']),(d['wing'],d['wide']),(d['tail'],d['wide'])]
@@ -22,11 +78,21 @@ def zone(a,scene,side):
     pts=[(d['wing'],side*d['wide']),(d['neck_start'],side*d['narrow']),(end,side*d['narrow']),(end,side*d['wide'])]
     return [[q[k]+u[k]*x+v[k]*y for k in (0,1)] for x,y in pts]
 
+def preset_polygon(a,key,fallback):
+    points=a['props'].get('preset_shapes',{}).get(key)
+    if not points:return fallback
+    _,u,v=frame(a)
+    origin=a['points'][-1]
+    return [[origin[i]+x*u[i]+y*v[i] for i in (0,1)] for x,y in points]
+
+
 def bridge(a,scene=None):
     if not a['props'].get('has_bridge'):return {}
     from automatic_markings import synthetic
     scene=scene or type('Context',(),{'scenario':dict(aircraft_length=40,aircraft_wingspan=36)})();side=-1 if a['props'].get('bridge_side','LEFT')=='RIGHT' else 1
-    a=synthetic(a['id'],'BRIDGE_COMPOSITE',zone(a,scene,side),'BRIDGE',stand_part=True)
+    from terminal19 import stand_home
+    a=synthetic(a['id'],'BRIDGE_COMPOSITE',preset_polygon(a,'bridge',zone(a,scene,side)),'BRIDGE',
+                stand_part=True,home_center=stand_home(scene,a))
     return {a['id']:a}
 
 WORK_ZONES59=('常规作业区','临时作业区')
@@ -43,16 +109,69 @@ def support(scene,a):
     if not props.get('remote_stand') and not props.get('has_bridge'):
         choices+=((-side,'work_zone_bridge_side'),)
     out={}
+    custom_keys={'WORK_WAIT':'work','TEMP_WAIT':'temporary'}
+    custom=props.get('preset_shapes',{})
+    for kind,key in custom_keys.items():
+        if custom.get(key):
+            mark=synthetic(a['id'],kind,preset_polygon(a,key,[]),'PRESET:'+kind,
+                           line_width=.1,spacing=2,stand_part=True)
+            out[mark['id']]=mark
     for direction,key in choices:
         default=NO_WORK_ZONE if key=='work_zone_bridge_side' else WORK_ZONES59[0]
         if props.get(key,default)==NO_WORK_ZONE:continue
         kind='TEMP_WAIT' if props.get(key)==WORK_ZONES59[1] else 'WORK_WAIT'
         suffix='WORK_WAIT:'+key if key!='work_zone' else 'WORK_WAIT'
+        if custom.get(custom_keys[kind]):continue
         mark=synthetic(a['id'],kind,zone(a,scene,direction),suffix,line_width=.1,spacing=2,stand_part=True)
         out[mark['id']]=mark
     if props.get('remote_stand'):return out
     d=envelope(a,scene);q=a['points'][-1];_,u,v=frame(a);c=[q[k]+u[k]*(d['nose_end']+2)+v[k]*side*(d['wide']-2) for k in (0,1)]
     mark=synthetic(a['id'],'CHOCKS',[c,[c[k]+u[k]*3 for k in (0,1)]],'CHOCKS',width=1.5,text='轮挡',text_height=.5,stand_part=True);out[mark['id']]=mark;return out
+
+def work_zone_style(scene,mark):
+    kind=mark['props']['mark_type']
+    owner_id=mark.get('owner','')
+    owner=scene.assets.get(owner_id,{}).get('props',{})
+    suffix=mark['id'].removeprefix('AUTO:'+owner_id+':')
+    return {**scene.data['meta'].get('stand_zone_style',{}).get(kind,{}),
+            **owner.get('preset_zone_style',{}).get(kind,{}),
+            **owner.get('preset_zone_overrides',{}).get(suffix,{})}
+
+
+def style_work_zones(scene,items,marks):
+    result=[]
+    for item in items:
+        mark=marks.get(item['oid'],{})
+        kind=mark.get('props',{}).get('mark_type')
+        if kind not in ('WORK_WAIT','TEMP_WAIT'):
+            result.append(item)
+            continue
+        style=work_zone_style(scene,mark)
+        if style:
+            item=dict(item)
+            for prop in ('stroke','fill'):
+                if item.get(prop) and style.get('color'):item[prop]=style['color']
+            if item['type']=='polygon':
+                item['work_zone_color']=item.get('stroke')
+                item['work_zone_style']=style
+        result.append(item)
+    return result
+
+
+def outline_work_zones(scene,items,marks):
+    result=[]
+    for item in items:
+        mark=marks.get(item['oid'],{})
+        kind=mark.get('props',{}).get('mark_type')
+        if kind in ('WORK_WAIT','TEMP_WAIT') and item['type'] in ('line','polygon') and item.get('stroke'):
+            style=work_zone_style(scene,mark)
+            width=style.get('outline_width',0) if style.get('underpaint',False) else 0
+            if width>0:
+                result.append(dict(item,fill=None,stroke=style.get('outline','#101010'),
+                                   width=item.get('width',.1)+2*width))
+        result.append(item)
+    return result
+
 
 def merged_work_zone_hatches(zones,marks):
     from geometry11 import LineString,Polygon,STRtree,lines,polygons,unary_union
@@ -70,24 +189,27 @@ def merged_work_zone_hatches(zones,marks):
         component=[seed]
         for i in component:
             neighbors=pending.intersection(index.query(shapes[i],predicate='intersects'))
+            seed_item=regular[seed][0]
+            neighbors={j for j in neighbors if
+                       regular[j][0].get('work_zone_color')==seed_item.get('work_zone_color')
+                       and regular[j][0].get('work_zone_style')==seed_item.get('work_zone_style')
+                       and regular[j][0]['width']==seed_item['width']}
             pending.difference_update(neighbors)
             component.extend(sorted(neighbors))
         if len(component)<2:continue
         item,_=regular[seed]
         oid=item['oid']
         props=marks[oid]['props']
-        p,q=item['points'][:2]
-        angle=props.get('hatch_angle',math.degrees(math.atan2(q[1]-p[1],q[0]-p[0]))+45)
         width=item['width']
         pitch=props.get('spacing',2)+width
         fill=unary_union(shapes[i] for i in component)
         generated=[]
         for area in polygons(fill):
             holes=unary_union(Polygon(ring) for ring in area.interiors)
-            for segment in hatch_segments(list(area.exterior.coords)[:-1],pitch,angle,props.get('hatch_phase',0)):
+            for segment in hatch_segments(list(area.exterior.coords)[:-1],pitch):
                 clipped=lines(LineString(segment).difference(holes)) if not holes.is_empty else ()
                 strokes=([list(q) for q in line.coords] for line in clipped) if not holes.is_empty else (segment,)
-                generated.extend(dict(type='line',oid=oid,points=stroke,stroke=item['stroke'],width=width,dash=None)
+                generated.extend(dict(type='line',oid=oid,points=stroke,stroke=item.get('work_zone_color',item['stroke']),width=width,dash=None)
                                  for stroke in strokes)
         hatches[oid]=generated
         suppressed.update(regular[i][0]['oid'] for i in component)

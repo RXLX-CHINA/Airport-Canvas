@@ -5,7 +5,7 @@ from geometry11 import Polygon,polygon
 def eligible(a):
     if not a or len(a.get('points',[]))<3:return False
     p=a['props']
-    if p.get('deice_layout12') or p.get('turn_pad'):return False
+    if p.get('deice_layout12'):return False
     if a['kind'] in ('APRON','EQUIPMENT','PROTECTION','CLOSED_AREA'):return True
     return a['kind']=='MARKING' and __import__('marking_catalog').CATALOG[p['mark_type']]['mode']=='AREA'
 def checked(points):

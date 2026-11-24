@@ -13,7 +13,7 @@ def batches(items):
     """Merge only adjacent, identical paint from the SAME editable owner."""
     rows=[];last=None
     for index,e in enumerate(items):
-        signature=(e['oid'],e['type'],e.get('stroke'),e.get('fill'),e.get('width',.15),tuple(e.get('dash') or ()),e.get('dash_offset',0),e.get('opacity',1.),e.get('cosmetic_pen',False)) if e['type']!='text' else None
+        signature=(e['oid'],e['type'],e.get('stroke'),e.get('fill'),e.get('width',.15),tuple(e.get('dash') or ()),e.get('dash_offset',0),e.get('opacity',1.),e.get('cosmetic_pen',False),e.get('round_caps',False),e.get('screen_weight',1.5)) if e['type']!='text' else None
         if signature is not None and rows and signature==last:rows[-1][0].append(index);rows[-1][1].append(e)
         else:rows.append(([index],[e]));last=signature
     return rows
@@ -86,19 +86,16 @@ class CanvasRenderer:
                         if part['type']=='polygon':path.closeSubpath()
                 q=old['q'] if old else W.QGraphicsPathItem()
                 if q.scene() is None:c.scene.addItem(q)
-                q.setPath(path);q.setZValue(index);q.setOpacity(e.get('opacity',1.));stroke=e.get('stroke');fill=e.get('fill');width=max(.001,float(e.get('width',.15)))
+                q.setPath(path);q.setZValue(index);stroke=e.get('stroke');fill=e.get('fill');width=max(.001,float(e.get('width',.15)))
                 if e['type']=='text':stroke=fill if e.get('black_outline') else None;fill=e.get('fill');width=max(.08,e.get('size',4)*.055)
-                pen=G.QPen(G.QColor('#151a20' if e.get('black_outline') and e['type']=='text' else stroke),width) if stroke else G.QPen(Qt.PenStyle.NoPen);pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin);pen.setCapStyle(Qt.PenCapStyle.FlatCap)
-                if e.get('cosmetic_pen'):pen.setCosmetic(True);pen.setWidthF(1.5)
+                pen=G.QPen(G.QColor('#151a20' if e.get('black_outline') and e['type']=='text' else stroke),width) if stroke else G.QPen(Qt.PenStyle.NoPen);pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin);pen.setCapStyle(Qt.PenCapStyle.RoundCap if e.get('round_caps') else Qt.PenCapStyle.FlatCap)
+                if e.get('cosmetic_pen'):pen.setCosmetic(True);pen.setWidthF(e.get('screen_weight',1.5))
                 if e.get('dash'):
                     pattern=list(e['dash']);pattern=pattern*2 if len(pattern)%2 else pattern;pen.setDashPattern([max(.001,x/width) for x in pattern]);pen.setDashOffset(e.get('dash_offset',0)/width)
-                q.setPen(pen);q.setBrush(G.QBrush(G.QColor(fill)) if fill else G.QBrush(Qt.BrushStyle.NoBrush));identifier=old['id'] if old else c.register_world(q,(self.tag,'owner:'+e['oid']));self._record_cache[key]=dict(q=q,id=identifier,data=data);self.metrics['path_updates']+=1
+                q.setPen(pen);q.setBrush(G.QBrush(G.QColor(fill)) if fill else G.QBrush(Qt.BrushStyle.NoBrush));identifier=old['id'] if old else c.register_world(q,(self.tag,'owner:'+e['oid']));c.update_layer_opacity(identifier,e.get('opacity',1.));self._record_cache[key]=dict(q=q,id=identifier,data=data);self.metrics['path_updates']+=1
                 for original_index in indices:self.draw_records[original_index]=q
             for key in set(self._record_cache)-keep:c.delete(self._record_cache.pop(key)['id'])
             self.items=items;self.metrics['rebuilds']+=1;self.metrics['last_build_ms']=(time.perf_counter()-start)*1000
         else:self.metrics['reuses']+=1
         if self.origin!=list(origin):self.metrics['pans']+=1
         c.camera21(origin,scale);self.origin=list(origin);self.scale=scale;self.metrics['camera_ms']=(time.perf_counter()-start)*1000
-        # An explicit viewport rect prevents Qt automatically re-centering the
-        # scene when a distant airport or an editing handle changes its bounds.
-        c.q.viewport().update()

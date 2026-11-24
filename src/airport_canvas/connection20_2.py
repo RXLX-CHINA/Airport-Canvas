@@ -45,10 +45,11 @@ def pick_axis(scene,q,tolerance):
         if d<=tolerance:rows.append((d,2,owner))
     return min(rows)[2] if rows else None
 
-def checks(scene):
+def checks(scene,generated=None):
     from automatic_markings import generated_markings
     out=[];seen=set()
-    for m in generated_markings(scene).values():
+    if generated is None:generated=generated_markings(scene)
+    for m in generated.values():
         p=m['props'];owner=m.get('owner')
         if p.get('paired_mandatory20_2') and p.get('auto_scaled') and owner not in seen:
             seen.add(owner);out.append(dict(object_id=owner,status='REVIEW_REQUIRED',rule='PAIRED_MANDATORY20_2',message='按项目选择在较窄道面两侧绘制强制性指令标志，字高为适应可用宽度已调整，需复核指标要求。',source='项目成对显示选择；MH5001—2021 6.2.12',actual=p['text_height'],required=p.get('design_text_height',4)))

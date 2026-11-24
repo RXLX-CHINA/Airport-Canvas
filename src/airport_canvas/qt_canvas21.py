@@ -61,12 +61,16 @@ class Canvas(Scrollable,Widget):
         a,b=math.cos(angle)*scale,math.sin(angle)*scale
         transform=G.QTransform(a,b,b,-a,origin[0],origin[1])
         desired,_=transform.inverted()
-        self.q.setSceneRect(desired.mapRect(C.QRectF(0,0,w,h)))
-        self.q.setTransform(transform)
-        self.q.horizontalScrollBar().setValue(0)
-        self.q.verticalScrollBar().setValue(0)
+        rect=desired.mapRect(C.QRectF(0,0,w,h))
+        horizontal=self.q.horizontalScrollBar()
+        vertical=self.q.verticalScrollBar()
+        if self.q.sceneRect()!=rect:self.q.setSceneRect(rect)
+        if self.q.transform()!=transform:self.q.setTransform(transform)
+        if horizontal.value():horizontal.setValue(0)
+        if vertical.value():vertical.setValue(0)
         inverse,_=self.q.viewportTransform().inverted()
-        self._overlay_root21.setTransform(inverse);self._grid_root21.setTransform(inverse);self.q.viewport().update()
+        if self._overlay_root21.transform()!=inverse:self._overlay_root21.setTransform(inverse)
+        if self._grid_root21.transform()!=inverse:self._grid_root21.setTransform(inverse)
     def _create(self,kind,coords,**options):
         if len(coords)==1 and isinstance(coords[0],(list,tuple)):coords=coords[0]
         coords=list(coords);self._item_id+=1;i=self._item_id;self._z+=1
@@ -82,9 +86,35 @@ class Canvas(Scrollable,Widget):
         if self.__dict__.get('_world_mode21') and kind!='window':
             tags=options.get('tags',());tags=(tags,) if isinstance(tags,str) else tags;q.setParentItem(self._grid_root21 if 'grid' in tags else self._overlay_root21)
         q.setZValue(self._z);self._items[i]=dict(q=q,type=kind,coords=coords,options={})
-        self.itemconfigure(i,**options);self._geometry(i);return i
+        self.itemconfigure(i,**options);self._geometry(i)
+        self.apply_layer_opacity(self._items[i])
+        return i
     def register_world(self,q,tags,kind='world'):
-        self._item_id+=1;i=self._item_id;self._items[i]=dict(q=q,type=kind,coords=[],options={});self.itemconfigure(i,tags=tags);q.setVisible('map' not in tags or self._map_visible21 is not False);return i
+        self._item_id+=1;i=self._item_id;self._items[i]=dict(q=q,type=kind,coords=[],options={});self.itemconfigure(i,tags=tags);q.setVisible('map' not in tags or self._map_visible21 is not False)
+        self.apply_layer_opacity(self._items[i])
+        return i
+
+    def apply_layer_opacity(self,record):
+        tags=record['options'].get('tags',())
+        if isinstance(tags,str):tags=(tags,)
+        if record['type']=='window' or set(tags)&{'grid','scale14','north23','view_mode18','chart_f8_badge'}:
+            return
+        item=record['q']
+        opacity=getattr(self,'layer_opacity_preview',None)
+        if opacity is None:
+            if 'original_opacity' in record:item.setOpacity(record.pop('original_opacity'))
+        else:
+            record.setdefault('original_opacity',item.opacity())
+            item.setOpacity(0. if 'pavement_underlay' in tags else opacity)
+
+    def set_layer_opacity_preview(self,opacity):
+        self.layer_opacity_preview=opacity
+        for record in self._items.values():self.apply_layer_opacity(record)
+
+    def update_layer_opacity(self,identifier,opacity):
+        record=self._items[identifier]
+        if 'original_opacity' in record:record['original_opacity']=opacity
+        else:record['q'].setOpacity(opacity)
     def create_line(self,*coords,**kw):return self._create('line',coords,**kw)
     def create_polygon(self,*coords,**kw):return self._create('polygon',coords,**kw)
     def create_rectangle(self,*coords,**kw):return self._create('rectangle',coords,**kw)

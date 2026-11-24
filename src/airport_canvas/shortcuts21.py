@@ -27,6 +27,7 @@ COMMANDS=(
     ('chart','<F8>','F8','航图模式'),
     ('true_north',None,'Alt+N','真北朝上'),
     ('grid_north',None,'Alt+Return','工程网格朝上'),
+    ('layer_transparency',None,'T','切换临时图层透明度'),
 )
 GLOBAL_COMMANDS={'new','open','save','undo','redo','signs','segments','lighting','chart','true_north','grid_north'}
 FIXED=(
@@ -84,6 +85,7 @@ class Shortcuts:
         for action,native in [('true_north',view.north_action),('grid_north',view.grid_action)]:
             native.setShortcuts([])
             self.callbacks[action]=(lambda event,native=native:native.trigger(),)
+        self.callbacks['layer_transparency']=(lambda event:app.toggle_layer_transparency(),)
         from user_settings34 import read
         config=read(app._preferences34)
         try:

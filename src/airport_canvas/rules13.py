@@ -50,7 +50,7 @@ def refine(scene,result):
             offset=side*(board/2+1.075);anchor=[q[k]+v[k]*offset for k in (0,1)];m=synthetic(a['owner'],'NO_ENTRY',[anchor,[anchor[k]+u[k]*10 for k in (0,1)]],'REVERSE_NO_ENTRY:'+str(side),text='NO ENTRY',text_height=height,character_ratio=.4,margin=.5,reverse_entry13=True,reverse_site31=a['site'],reverse_width31=width);result[m['id']]=m
     remove=[]
     for oid,mark in result.items():
-        if mark['props']['mark_type'] not in ('TWY_CENTER','TWY_ENHANCED','LEAD_IN','LEAD_OUT','AUX_LEAD','ALIGNMENT','TURN_PAD_GUIDE'):continue
+        if mark['props']['mark_type'] not in ('TWY_CENTER','TWY_ENHANCED','LEAD_IN','LEAD_OUT','AUX_LEAD','ICAO_AUX_LEAD','ALIGNMENT','TURN_PAD_GUIDE'):continue
         owner=mark.get('owner');m=scene.movements.get(owner);a=scene.assets.get(owner)
         if a and a['props'].get('closed') or m and any(scene.assets[m[k]['asset']]['props'].get('closed') for k in ('from','to')):remove.append(oid)
     for oid in remove:result.pop(oid,None)
@@ -79,7 +79,7 @@ def asset_guide(scene,a):
         other=next((m[k] for k in ('from','to') if scene.assets[m[k]['asset']]['kind']=='RUNWAY'),None)
         if own and other:
             points=runway_extension(scene,points,scene.assets[other['asset']],0 if own['station']<g.length(a['points'])/2 else -1,
-                                    preserve_exterior=manual,rapid=manual or bool(a['props'].get('rapid_exit')))
+                                    preserve_exterior=True,rapid=manual or bool(a['props'].get('rapid_exit')))
     return points
 
 def closure_items(scene,items,generated):
@@ -94,7 +94,7 @@ def closure_items(scene,items,generated):
     mask=unary_union([polygon(g.rectangle(a['points'],a['props']['width'])) if a['kind']=='RUNWAY' else polygon(a['points']) if a['kind']=='APRON' else LineString(a['points']).buffer(a['props']['width']/2,cap_style=2) for a in closed]);out=[]
     for item in items:
         mark=generated.get(item.get('oid')) or scene.assets.get(item.get('oid'));owner=mark.get('owner',item.get('oid')) if mark else item.get('oid');m=scene.movements.get(owner)
-        guide=item.get('stroke')==YELLOW and item['type']=='line' and (not mark or mark['kind']!='MARKING' or mark['props']['mark_type'] in ('TWY_CENTER','TWY_ENHANCED','LEAD_IN','LEAD_OUT','AUX_LEAD','ALIGNMENT','TURN_PAD_GUIDE'))
+        guide=item.get('stroke')==YELLOW and item['type']=='line' and (not mark or mark['kind']!='MARKING' or mark['props']['mark_type'] in ('TWY_CENTER','TWY_ENHANCED','LEAD_IN','LEAD_OUT','AUX_LEAD','ICAO_AUX_LEAD','ALIGNMENT','TURN_PAD_GUIDE'))
         if not guide:out.append(item);continue
         if owner in closed_ids or m and any(m[k]['asset'] in closed_ids for k in ('from','to')):continue
         line=LineString(item['points'])
@@ -165,4 +165,7 @@ def sync_marks(scene):
         if mark['kind']!='MARKING':continue
         runway=scene.assets.get(p.get('label_asset'))
         if p.get('mark_type')=='RWY_CIRCLE' and runway and runway['kind']=='RUNWAY':p.update(width=runway['props']['width']/2,line_width=runway_center_width(scene,runway))
-        if p.get('mark_type')=='HOLD_A' and runway and runway['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE') and not runway['props'].get('hold_include_shoulders13',True):p['width']=min(p['width'],runway['props']['width'])
+        if (p.get('mark_type')=='HOLD_A' and not p.get('hold_width_manual') and runway
+                and runway['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE')
+                and not runway['props'].get('hold_include_shoulders13',True)):
+            p['width']=min(p['width'],runway['props']['width'])

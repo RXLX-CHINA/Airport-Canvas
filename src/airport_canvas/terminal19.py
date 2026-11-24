@@ -30,6 +30,7 @@ def body(scene,q,width=140.,depth=90.,shape='RECTANGLE',points=None,number=None,
 def edge(a,q):
     pts=a['points'];rows=[]
     for i,(p,z) in enumerate(zip(pts,pts[1:]+pts[:1])):
+        if g.distance(p,z)<=1e-6:continue
         d,s,target=g.project([p,z],q);rows.append((d,i,s,target))
     return min(rows)
 def frame(a,index):
@@ -37,7 +38,7 @@ def frame(a,index):
 def quad(a,index,station,width,length,shear=0.):
     p,z,u,n=frame(a,index);L=g.distance(p,z)
     curved=a['props'].get('building_shape19')=='CIRCLE'
-    if width<=0 or length<=0:raise ValueError('挤出尺寸必须大于0')
+    if not all(math.isfinite(x) for x in (station,width,length,shear)) or width<=0 or length<=1e-6:raise ValueError('挤出尺寸必须大于0')
     if not curved and (width+2>L or not width/2+.5<=station<=L-width/2-.5):raise ValueError('此边长度或位置不足以挤出，请选择较长的边并避开拐角')
     q=[p[k]+u[k]*station for k in (0,1)]
     return [[q[k]+u[k]*(x+(shear if y else 0))+n[k]*y for k in (0,1)] for x,y in [(-width/2,0),(width/2,0),(width/2,length),(-width/2,length)]]
@@ -46,16 +47,18 @@ def extrusion(a,index,station,target,perpendicular=False):
     origin,_,tangent,normal=frame(a,index)
     delta=[target[k]-origin[k]-tangent[k]*station for k in (0,1)]
     depth=sum(x*y for x,y in zip(delta,normal))
-    if a['props'].get('building_role19')=='PIER':
-        depth=abs(depth)
-    return depth, (0. if perpendicular else sum(x*y for x,y in zip(delta,tangent)))
+    # The pointer supplies a distance. The selected edge supplies the side.
+    return abs(depth), (0. if perpendicular else sum(x*y for x,y in zip(delta,tangent)))
 
-def extrude_pier(scene,aid,index,station,width=28.,length=160.,shear=0.):
-    a=scene.assets[aid]
+def pier_footprint(scene,a,index,station,width,length,shear=0.):
     if a['props'].get('building_role19')!='TERMINAL':raise ValueError('请先选择航站楼主体')
     if length<=0:raise ValueError('指廊长度必须大于0')
     pts=quad(a,index,station,width,length,shear);shape=Polygon(pts)
     if any(shape.intersection(polygon(b['points'])).area>.001 for b in buildings(scene)):raise ValueError('指廊与已有建筑或廊桥重叠')
+    return pts
+
+def extrude_pier(scene,aid,index,station,width=28.,length=160.,shear=0.):
+    pts=pier_footprint(scene,scene.assets[aid],index,station,width,length,shear)
     with scene.transaction('从主体边线挤出指廊'):
         pid=scene.create_asset('EQUIPMENT','指廊',pts,building_role19='PIER',terminal_root19=aid,body_edge19=index,width=1)
         scene.assets[pid]['container_id']=aid
@@ -123,10 +126,13 @@ def renumber(scene,root,start_bridge,clockwise=True,start=1,digits=2):
         for i,a in enumerate(rows):a['props']['bridge_number19']=str(start+i).zfill(digits);a['name']='廊桥 '+a['props']['bridge_number19']
     return [a['id'] for a in rows]
 def stand_home(scene,a):
-    from stand13 import zone
+    from stand13 import preset_polygon,zone
+    from stand11 import frame
     side=-1 if a['props'].get('bridge_side','LEFT')=='RIGHT' else 1
-    pts=zone(a,scene,side)
-    return [sum(q[k] for q in pts)/len(pts) for k in (0,1)]
+    pts=preset_polygon(a,'bridge',zone(a,scene,side))
+    _,u,v=frame(a)
+    dx,dy=a['props'].get('bridge_home_offset',[0.,0.])
+    return [sum(q[k] for q in pts)/len(pts)+dx*u[k]+dy*v[k] for k in (0,1)]
 
 def align_stand(scene,a,tip):
     # Translate the entire kit, preserving its frame and the home circle's
@@ -169,11 +175,55 @@ def sync(scene):
                         except ValueError:p['bridge_bound19']=False
                 else:align_stand(scene,a,bridge_tip(bridge))
             else:p['bridge_bound19']=False
+def other_building_label(asset):
+    """Fit a horizontal block inside the footprint, wrapping at spaces."""
+    from functools import lru_cache
+    from shapely.geometry import box
+    from map_painter import text_sprite
+    props=asset['props']
+    value=props.get('terminal_number19',asset['name'])
+    words=value.split()
+    if not words:return
+    area=polygon(asset['points'])
+    if area.is_empty:return
+    left,bottom,right,top=area.bounds
+    size=min(float(props.get('building_text_height20_3',10)),(top-bottom)*.8)
+    if size<=0:return
+
+    @lru_cache(maxsize=256)
+    def ratio(text):
+        sprite=text_sprite(text,'#15354b',100)
+        return sprite.width/sprite.height
+
+    centers=[area.centroid,area.representative_point()]
+    for _ in range(24):
+        for center in centers:
+            for limit in (1.,.8,.65,.5,.35,.25,.15,.08):
+                width=(right-left)*limit
+                lines=[]
+                for word in words:
+                    trial=lines[-1]+' '+word if lines else word
+                    if lines and size*ratio(trial)<=width:lines[-1]=trial
+                    else:lines.append(word)
+                pitch=1.25*size
+                rows=[(line,center.y+(len(lines)-1-2*i)*pitch/2) for i,line in enumerate(lines)]
+                if all(area.covers(box(center.x-ratio(line)*size*.55,y-size*.6,
+                                       center.x+ratio(line)*size*.55,y+size*.6))
+                       for line,y in rows):
+                    return [(line,(center.x,y),size) for line,y in rows]
+        size*=.82
+    return []
+
+
 def items(scene):
     result=[]
     for a in buildings(scene):
         p=a['props'];role=p['building_role19'];fill={'TERMINAL':'#bfd1de','PIER':'#d1dce5','BRIDGE':'#a4bccb','OTHER':'#c9c2b9'}[role];result.append(dict(type='polygon',oid=a['id'],points=a['points'],fill=p.get('building_color19',fill),stroke='#ffffff' if role=='BRIDGE' and p.get('white_outline',False) else None,width=.35,building19=True));q=polygon(a['points']).centroid;label=p.get('terminal_number19','') if role in ('TERMINAL','OTHER') else p.get('bridge_number19','') if role=='BRIDGE' else ''
-        if label:result.append(dict(type='text',oid=a['id'],points=[[q.x,q.y]],text=label,fill='#15354b',size=p.get('building_text_height20_3',4 if role=='BRIDGE' else 10),rotation=0,world_text=True,building19=True))
+        if role=='OTHER':
+            for line,point,size in other_building_label(a) or ():
+                result.append(dict(type='text',oid=a['id'],points=[point],text=line,fill='#15354b',
+                                   size=size,rotation=0,world_text=True,building19=True))
+        elif label:result.append(dict(type='text',oid=a['id'],points=[[q.x,q.y]],text=label,fill='#15354b',size=p.get('building_text_height20_3',4 if role=='BRIDGE' else 10),rotation=0,world_text=True,building19=True))
     labels=[i for i in result if i['type']=='text'];result=[i for i in result if i['type']!='text']+__import__('terminal_style20_3').outlines(buildings(scene))+labels
     # Roof indication remains open so the stand guidance stays readable.
     for a in scene.assets.values():

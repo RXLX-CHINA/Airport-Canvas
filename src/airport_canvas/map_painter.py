@@ -63,7 +63,12 @@ def draw_items(items,size,origin,scale,background='#e9eef2',grid=False,progress=
             length=g.distance(a,b);used=0;u=g.unit(a,b)
             while used<length-1e-9:
                 take=min(remain,length-used)
-                if idx%2==0:d.line([(a[0]+u[0]*used,a[1]+u[1]*used),(a[0]+u[0]*(used+take),a[1]+u[1]*(used+take))],fill=color,width=width)
+                if idx%2==0:
+                    segment=[(a[0]+u[0]*t,a[1]+u[1]*t) for t in (used,used+take)]
+                    d.line(segment,fill=color,width=width)
+                    if e.get('round_caps'):
+                        radius=width/2
+                        for x,y in segment:d.ellipse((x-radius,y-radius,x+radius,y+radius),fill=color)
                 used+=take;remain-=take
                 if remain<1e-8:idx=(idx+1)%len(pattern);remain=pattern[idx]
     return im

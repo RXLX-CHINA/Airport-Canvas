@@ -30,6 +30,8 @@ def geometry(a,scene=None):
         side=1 if local(a,number['point'])[1]>0 else -1
         entry=paths.get('ENTRY_STUB:'+str(side),paths.get('ENTRY:'+str(side),[]));turn=paths.get('TURN:'+str(side),[])
         if kind=='C':path=paths.get('LABEL_STUB',[])+paths.get('ALIGN',[])
+        elif kind=='B' and not (entry and turn):
+            path=base['uncut_turns'][side]
         elif entry and turn:
             reach=min(6.,g.length(entry)*.45,g.length(turn)*.3);left=g.subpath(entry,0,g.length(entry)-reach);right=g.subpath(turn,reach,g.length(turn));gap=g.cubic(left[-1],right[0],g.at(entry,g.length(entry)-reach)[1],g.at(turn,reach)[1],g.distance(left[-1],right[0])*.45,steps=128);path=left+gap[1:]+right[1:]
         else:path=turn
