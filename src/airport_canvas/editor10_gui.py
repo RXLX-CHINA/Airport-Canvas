@@ -118,10 +118,10 @@ class Editor10(Editor9):
         if self.mode=='ROAD' or key in ROAD_MARKS|{'ROAD_DIVIDER'}:h=hit(self.scene,self.world(e.x,e.y),max(.02,12/self.zoom))
         elif self.mode in TAXIS or self.mode=='STAND' and not self.points:
             from curve_model import snap
-            h=snap(self.scene,self.world(e.x,e.y),max(.02,12/self.zoom))
+            h=snap(self.scene,self.world(e.x,e.y),max(.02,12/self.zoom),visible=self.can_edit_object)
         elif key and CATALOG[key]['shape']=='shoulder_bars':
             from editor7_model import snap_path
-            h=snap_path(self.scene,self.world(e.x,e.y),max(.02,12/self.zoom));label='吸附边线'
+            h=snap_path(self.scene,self.world(e.x,e.y),max(.02,12/self.zoom),visible=self.can_edit_object);label='吸附边线'
             if h:
                 d,aid,s,q=h;a=self.scene.assets[aid];q,u=g.at(a['points'],s);v=[-u[1],u[0]];point=self.world(e.x,e.y);side=1 if sum((point[k]-q[k])*v[k] for k in (0,1))>=0 else -1
                 h=(d,aid,s,[q[k]+v[k]*side*a['props']['width']/2 for k in (0,1)])
@@ -151,7 +151,7 @@ class Editor10(Editor9):
             return
         if self.mode=='STOPWAY':
             from pavement10 import snap_stopway
-            hit=snap_stopway(self.scene,p,self.zoom)
+            hit=snap_stopway(self.scene,p,self.zoom,self.can_edit_object)
             if not hit:
                 self.status.set('请靠近跑道端头，等待吸附提示')
                 return 'break'
@@ -166,7 +166,7 @@ class Editor10(Editor9):
         if self.mode=='STAND':
             from curve_model import snap
             if not self.points:
-                h=snap(self.scene,p,max(.02,12/self.zoom))
+                h=snap(self.scene,p,max(.02,12/self.zoom),visible=self.can_edit_object)
                 if not h or self.scene.assets[h[1]]['kind'] not in TAXIS:self.status.set('机位入口须点选滑行道中线');return
                 self._stand_hit10=h;self.points=[h[3]];self.redraw();return
             from stand10 import attached_stand
@@ -181,7 +181,7 @@ class Editor10(Editor9):
             self.redraw();return
         if self.mode in TAXIS and not self.points:
             from curve_model import snap
-            h=snap(self.scene,p,max(.02,12/self.zoom))
+            h=snap(self.scene,p,max(.02,12/self.zoom),visible=self.can_edit_object)
             if h:self._start_tangent10=g.at(self.scene.assets[h[1]]['points'],h[2])[1]
         if self.mode=='NODES' and self.selection not in self.scene.assets:
             from roads10 import hit
@@ -204,7 +204,7 @@ class Editor10(Editor9):
                     self.selection=place(self.scene,key,h,self.lane10.get())[0];self.set_mode('SELECT');self.refresh();return
             if key in ('SHOULDER_BARS','TWY_SHOULDER') or CATALOG[key]['shape']=='shoulder_bars':
                 from editor7_model import snap_path
-                h=snap_path(self.scene,p,max(.02,12/self.zoom))
+                h=snap_path(self.scene,p,max(.02,12/self.zoom),visible=self.can_edit_object)
                 if not h:self.status.set('请点选道面边线附近');return
                 _,aid,s,q=h;a=self.scene.assets[aid];q,u=g.at(a['points'],s);v=[-u[1],u[0]];side=1 if sum((p[k]-q[k])*v[k] for k in (0,1))>=0 else -1
                 pts=g.subpath(a['points'],max(0,s-15),min(g.length(a['points']),s+15));from pavement_geometry import offset
@@ -306,8 +306,25 @@ class Editor10(Editor9):
     def cancel_action(self,e=None):
         if self._drag10:self._drag10=None;self.canvas.delete('geometry_drag39')
         return super().cancel_action(e)
+    def return_to_linked_taxiway(self):
+        movement=self.scene.movements.get(self.selection)
+        if not movement or not movement.get('legacy_attachment'):return False
+        child=movement['to']['asset']
+        if child not in self.scene.assets or not self.can_edit_object(child):return False
+        self._drag10=None
+        self.canvas.delete('geometry_drag39')
+        self.select(child)
+        self.canvas.focus_set()
+        self.redraw()
+        return True
+
     def update_inspector(self):
-        super().update_inspector();a=self.scene.assets.get(self.selection)
+        super().update_inspector()
+        movement=self.scene.movements.get(self.selection)
+        if movement and movement.get('legacy_attachment'):
+            ttk.Button(self.property_body,text='返回滑行道属性',
+                       command=self.return_to_linked_taxiway).pack(fill='x',padx=8,pady=5)
+        a=self.scene.assets.get(self.selection)
         if not a:return
         self._inspector_busy=True
         try:

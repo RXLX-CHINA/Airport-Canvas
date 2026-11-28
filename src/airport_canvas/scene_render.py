@@ -470,21 +470,15 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
             for item in out[first:]:item['chart_taxi_owners']=(mid,)
         if m.get('geometry')=='RAPID':
             for item in out[first:]:item['rapid_runway_guide']=True
-        if False:  # Shared boundaries and reverse guides are handled independently. 
-            for side in (-1,1):
-                for inset in (.075,.375):clipped(mid,offset(pts,side*(m['width']/2-inset)),lambda q,outside:in_runway(q,.2) or other_pavement(outside,mid) or holding_gap(q),probe_offset=side*(inset+.25))
-            from junction_routes import branches
-            for branch in branches(scene,m):
-                port = m.get(branch.get('side','to'),m['to'])
-                if (m.get('join_reverse_visible',True) and m.get('geometry')!='RAPID'
-                        and mid not in closed_routes and port['asset'] not in closed_routes):
-                    clipped(branch['oid'],branch['points'],holding_gap)
-                if m.get('reverse_join_pavement',True):
-                    if m.get('geometry')=='RAPID':
-                        from smart_routes import reverse_surface
-                        branch=reverse_surface(scene,m,branch)
-                    for side in (-1,1):
-                        for inset in (.075,.375):clipped(branch['oid'],offset(branch['points'],side*(m['width']/2-inset)),lambda q,outside:in_runway(q,.2) or other_pavement(outside,branch['oid']) or holding_gap(q),probe_offset=side*(inset+.25))
+        if m.get('geometry')!='RAPID':continue
+        from junction_routes import branches
+        for branch in branches(scene,m):
+            port=m[branch.get('side','to')]
+            if (m.get('join_reverse_visible',True)
+                    and mid not in closed_routes and port['asset'] not in closed_routes):
+                first=len(out)
+                clipped(branch['oid'],branch['points'],holding_gap)
+                for item in out[first:]:item['chart_taxi_owners']=(mid,port['asset'])
     for j in junctions:
         for guide in junction_guides.get(j['id'],()):
             points=junction_guide_path(scene,j,guide)
@@ -536,7 +530,7 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
                 else:out.append(item)
     from shoulders17 import bars as shoulder_stripes
     from geometry11 import taxi_edges,runway_edges
-    if len(surfaces['pavement'])>=120:
+    if getattr(scene,'multicore_enabled',True) and len(surfaces['pavement'])>=500:
         from concurrent.futures import ThreadPoolExecutor
         # All three GEOS passes read the same immutable surface snapshot.
         with ThreadPoolExecutor(max_workers=2,thread_name_prefix='pavement-edge') as workers:
@@ -563,9 +557,10 @@ def display_list(scene,labels=False,facilities=True,protection=True,board_enlarg
     out=style_work_zones(scene,out,markings)
     from stand_overlap9 import dash_stand_overlaps
     out=dash_stand_overlaps(scene,paint_boundaries(merge_work_zone_outlines(scene,out,markings),markings),markings)
-    out=clip_work_zones_at_stands(out,markings)
-    out=clip_merged_stand_lines(scene,out,markings)
+    out=clip_work_zones_at_stands(out,markings,(
+        a['points'] for a in scene.assets.values() if a['props'].get('building_role19')=='BRIDGE'))
     out=outline_work_zones(scene,out,markings)
+    out=clip_merged_stand_lines(scene,out,markings)
     out.extend(taxi_ink)
     out.extend(runway_ink)
     from paint12 import interrupt as interrupt_paint

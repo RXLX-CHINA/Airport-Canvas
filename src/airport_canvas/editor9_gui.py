@@ -105,6 +105,9 @@ class Editor9(Editor8):
             if a and a['kind']=='STAND':
                 sec=self.section('引入线构型细节')
                 self.property_field(sec,'lead_direction','允许引入方向',a['props'].get('lead_direction','BOTH'),'radio',['BOTH','LEFT','RIGHT'])
+                if a['props'].get('remote_stand'):
+                    self.property_field(sec,'exit_direction','允许引出方向',
+                                        a['props'].get('exit_direction','BOTH'),'radio',['BOTH','LEFT','RIGHT'])
                 for key,label,default in [('lead_label_angle','A/D编号轴线角 °',60),('lead_g','G 留白 m',.5),('lead_h','H 横向净距 m',.5),('lead_i','I 续线留白 m',1),('lead_j','J 下留白 m',1),('lead_k','K 上留白 m',2),('lead_l','L 编号间距 m',1),('lead_m','M 短线 m',1),('lead_n','N 编号底距 m',1),('lead_p','P 编号上留白 m',2)]:self.property_field(sec,key,label,a['props'].get(key,default))
                 self.property_field(sec,'show_safety','显示折线机位安全线',a['props'].get('show_safety',True),'bool')
         finally:self._inspector_busy=False

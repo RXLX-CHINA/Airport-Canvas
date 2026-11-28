@@ -154,7 +154,7 @@ class EditorApp(BaseApp):
     def pick(self,p,paths_only=False):
         if not paths_only:
             for aid,a in reversed(list(self.scene.assets.items())):
-                if a['kind']!='MARKING':continue
+                if a['kind']!='MARKING' or not self.can_edit_object(aid):continue
                 if CATALOG[a['props']['mark_type']]['mode']=='AREA' and g.inside(p,a['points']):return 0,aid,0,p
                 for e in primitives(a):
                     if e['type']=='text' and g.distance(e['points'][0],p)<max(7/self.zoom,e['size']*1.5):return 0,aid,0,p
@@ -166,7 +166,7 @@ class EditorApp(BaseApp):
         self.canvas.focus_set()
         p=self.world(e.x,e.y)
         if self.mode=='JUNCTION':
-            options=[j for j in crossings(self.scene) if g.distance(j['point'],p)<max(30,16/self.zoom)]
+            options=[j for j in crossings(self.scene) if self.can_edit_object(j['id']) and g.distance(j['point'],p)<max(30,16/self.zoom)]
             if options:self.select(min(options,key=lambda j:g.distance(j['point'],p))['id'])
             else:self.status.set('此处没有可编辑的道面交汇点；可先让路线相交或使用连接曲线。')
             return
@@ -230,8 +230,11 @@ class EditorApp(BaseApp):
             pts=copy.deepcopy(self.points)
             if is_mark:
                 if spec['mode']=='POINT':pts=[pts[0],[pts[0][0]+10,pts[0][1]]]
-                self.selection=self.scene.create_marking(mode[5:],pts)
-            else:self.selection=self.scene.create_asset(mode,NAMES[mode]+' '+str(len(self.scene.assets)+1),pts)
+                values=getattr(self,'_draft_values11',{}) if getattr(self,'_draft11',None)==mode else {}
+                self.selection=self.scene.create_marking(mode[5:],pts,**values)
+            else:
+                values=getattr(self,'_draft_values11',{}) if getattr(self,'_draft11',None)==mode else {}
+                self.selection=self.scene.create_asset(mode,NAMES[mode]+' '+str(len(self.scene.assets)+1),pts,**values)
             self.points=[];self.route_preview=None
             if not self.repeat.get():self.mode='SELECT';self.canvas.configure(cursor='arrow')
             self.refresh()

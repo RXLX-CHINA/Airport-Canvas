@@ -45,8 +45,8 @@ def validate_stand(value):
     from shapely.geometry import Polygon
     for key,points in value.get('preset_shapes',{}).items():
         family=key.split(':',1)[0]
-        path=family in ('lead','combined_lead','icao_aux_lead')
-        if family not in ('bridge','work','temporary','lead','combined_lead','icao_aux_lead') or not isinstance(points,list) or len(points)<(2 if path else 3):
+        path=family in ('lead','combined_lead','icao_aux_lead','pushback')
+        if family not in ('bridge','work','temporary','lead','combined_lead','icao_aux_lead','pushback') or not isinstance(points,list) or len(points)<(2 if path else 3):
             raise ValueError('Invalid stand polygon.')
         if any(len(q)!=2 or any(type(x) not in (int,float) or not math.isfinite(x) for x in q) for q in points):
             raise ValueError('Invalid stand polygon coordinates.')
@@ -65,7 +65,7 @@ def validate_stand(value):
     allowed=('preset_pose','preset_nodes','aircraft_span','aircraft_length','lead_type','stops','preset_shapes','preset_zone_style','preset_zone_overrides',
              'has_bridge','bridge_side','show_safety','work_zone','work_zone_bridge_side','remote_stand',
              'ga_stand','stand_support','ga_frame_color','ga_outline_color','ga_text_color',
-             'work_zone_left','work_zone_right','show_number')
+             'work_zone_left','work_zone_right','show_number','single_lead_number','crossing_stand_numbers')
     result={k:copy.deepcopy(value[k]) for k in allowed if k in value}
     for index,stop in enumerate(result['stops'],1):
         stop.setdefault('id',str(index))
@@ -162,6 +162,7 @@ def open_presets(app):
     for code,label in [('bridge',caption('廊桥','Bridge')),('remote',caption('远机位','Remote')),
                        ('ga',caption('通航','General aviation'))]:
         stand_type.addItem(label,code)
+    single_number=W.QCheckBox()
     safety=W.QCheckBox()
     safety.setChecked(True)
     side=W.QComboBox()
@@ -171,6 +172,7 @@ def open_presets(app):
     for label,widget in ((caption('\u5df2\u4fdd\u5b58\u9884\u8bbe','Saved presets'),saved),(caption('\u540d\u79f0','Name'),name),
         (caption('\u7ffc\u5c55','Wingspan'),span),(caption('\u673a\u8eab\u957f\u5ea6','Aircraft length'),size),
         (caption('\u5f15\u5165\u7ebf\u7c7b\u578b','Lead-in type'),lead),(caption('\u673a\u4f4d\u7c7b\u578b','Stand type'),stand_type),
+        (caption('引入线中线单编号','Single number on lead-in'),single_number),
         (caption('\u5eca\u6865\u4fa7','Bridge side'),side),(caption('\u663e\u793a\u5b89\u5168\u7ebf','Show safety line'),safety),
         (caption('\u9ed8\u8ba4\u4f5c\u4e1a\u533a','Default work zone'),zone)):
         sf.addRow(label,widget)
@@ -193,6 +195,9 @@ def open_presets(app):
         from stand11 import frame
         if not one.plan:one.refresh(fit=True)
         _,value,coords=next(iter(one.plan.values()))
+        owner=next(iter(one.plan))
+        pushback=key.startswith('pushback:')
+        suffix='CUSTOM:'+key
         origin=coords[-1]
         _,u,v=frame(dict(points=coords,props=value))
         def world(point):
@@ -200,13 +205,25 @@ def open_presets(app):
             return [origin[i]+u[i]*x+v[i]*y for i in (0,1)]
         def commit(points):
             if points:
+                if pushback:
+                    points=list(points)
+                    points[-1],snapped=one.snap_pushback(owner,points[-1])
                 local=[[(x-origin[0])*axis[0]+(y-origin[1])*axis[1] for axis in (u,v)] for x,y in points]
                 validate_stand(dict(stand_values(),preset_shapes={**shapes,key:local}))
                 shapes[key]=local
+                if pushback:
+                    from stand_pushback import relative_coordinates
+                    nodes['centreline-relative:'+suffix]=relative_coordinates(
+                        one.render_scene,one.render_scene.assets[owner],points)
+                    nodes.pop('@'+suffix,None)
+                    nodes['snap:'+suffix]=[[0,1]] if snapped else []
+                    one.key='AUTO:'+owner+':'+suffix
             else:shapes.pop(key,None)
             schedule()
-        one.start_drawing(label,[world(q) for q in shapes.get(key,[])],
-                          key.split(':',1)[0] not in ('lead','combined_lead','icao_aux_lead'),commit)
+        draft=one.nodes.get('AUTO:'+owner+':'+suffix) if pushback else None
+        one.start_drawing(label,copy.deepcopy(draft) if draft is not None else [world(q) for q in shapes.get(key,[])],
+                          key.split(':',1)[0] not in ('lead','combined_lead','icao_aux_lead','pushback'),commit,
+                          pushback_owner=owner if pushback else None)
 
     for key,label in (('bridge',caption('\u5eca\u6865\u4f4d\u5f62\u72b6','Bridge shape')),
                       ('work',caption('\u4f5c\u4e1a\u533a\u5f62\u72b6','Work zone shape')),
@@ -218,6 +235,7 @@ def open_presets(app):
     for key,zh,en in (
         ('icao_aux_lead','ICAO 辅助机位引入线','ICAO auxiliary stand lead-in'),
         ('lead','引入线','Lead-in'),('combined_lead','组合机位引入线','Combined stand lead-in'),
+        ('pushback','推出线','Pushback line'),
         ('work','作业区','Work zone'),('temporary','临时作业区','Temporary work zone'),
         ('bridge','廊桥区','Bridge area')):
         component_type.addItem(caption(zh,en),key)
@@ -263,7 +281,7 @@ def open_presets(app):
             lead_type=lead.currentText(),has_bridge=stand_type.currentData()=='bridge',
             remote_stand=stand_type.currentData()=='remote',ga_stand=stand_type.currentData()=='ga',
             bridge_side=side.currentData(),
-            show_safety=safety.isChecked(),work_zone=zone.currentText(),stops=stops,
+            show_safety=safety.isChecked(),single_lead_number=single_number.isChecked(),work_zone=zone.currentText(),stops=stops,
             preset_shapes={k:v for k,v in shapes.items() if v},preset_zone_style=zone_styles(),preset_zone_overrides=zone_overrides,preset_nodes=nodes,preset_pose=pose)
 
     def snapshot():
@@ -275,6 +293,7 @@ def open_presets(app):
         lead.setCurrentText(value['lead_type'])
         kind='ga' if value.get('ga_stand') else 'remote' if value.get('remote_stand') or not value.get('has_bridge',True) else 'bridge'
         stand_type.setCurrentIndex(stand_type.findData(kind))
+        single_number.setChecked(value.get('single_lead_number',False))
         safety.setChecked(value.get('show_safety',True))
         side.setCurrentIndex(max(0,side.findData(value.get('bridge_side','LEFT'))))
         zone.setCurrentText(value.get('work_zone',WORK_ZONES59[0]))
@@ -507,10 +526,54 @@ def open_presets(app):
             sample.data['meta'][key]={pair_key(a,b):True for a,b in combinations(info,2)}
         return sample,info
 
-    def edit_node(preview,multiple,key,index,point,inserting=False,deleting=False):
+    def edit_node(preview,multiple,key,index,point,inserting=False,deleting=False,radius=False):
         owner=next((oid for oid in preview.plan if key==oid or key.startswith('AUTO:'+oid+':')),None)
         if owner is None:return
         i,value,coords=preview.plan[owner]
+        suffix=key.removeprefix('AUTO:'+owner+':')
+        if suffix.startswith('CUSTOM:pushback:'):
+            target=instance_nodes.setdefault(str(i),{}) if multiple else nodes
+            radius_key='radius:'+suffix
+            radii=dict(value.get('preset_nodes',{}).get(radius_key,()))
+            if not inserting and not deleting and not radius and index==len(preview.nodes[key])-1:
+                point,snapped=preview.snap_pushback(owner,point)
+                target['snap:'+suffix]=[[0,1]] if snapped else []
+            if deleting and index==len(preview.nodes[key])-1 and len(preview.nodes[key])>2:
+                target['snap:'+suffix]=[]
+            if radius:
+                relative_key='centreline-relative:'+suffix
+                if relative_key not in value.get('preset_nodes',{}):
+                    from stand_pushback import relative_coordinates
+                    target[relative_key]=relative_coordinates(
+                        preview.render_scene,preview.render_scene.assets[owner],preview.nodes[key])
+                radii[index]=point
+                target[radius_key]=[[j,r] for j,r in sorted(radii.items())]
+                schedule()
+                return True
+            if inserting or (deleting and index is not None and len(preview.nodes[key])>2):
+                if deleting:
+                    radii={j-(j>index):r for j,r in radii.items() if j!=index}
+                else:
+                    radii={j+(j>=index):r for j,r in radii.items()}
+                target[radius_key]=[[j,r] for j,r in sorted(radii.items())]
+            relative_key='centreline-relative:'+suffix
+            if deleting and index is None:
+                target[radius_key]=[]
+                target[relative_key]=[]
+            else:
+                points=list(preview.nodes[key])
+                if deleting:
+                    if len(points)<=2:return False
+                    points.pop(index)
+                elif inserting:
+                    points.insert(index,point)
+                else:
+                    points[index]=point
+                from stand_pushback import relative_coordinates
+                target[relative_key]=relative_coordinates(
+                    preview.render_scene,preview.render_scene.assets[owner],points)
+            schedule()
+            return True
         if deleting:
             if key==owner:return False
             suffix=key.removeprefix('AUTO:'+owner+':')
@@ -554,7 +617,7 @@ def open_presets(app):
         suffix=key.removeprefix('AUTO:'+owner+':')
         from stand11 import frame
         _,u,v=frame(dict(points=coords,props=value))
-        if inserting or '@'+suffix in value.get('preset_nodes',{}):
+        if inserting or suffix.startswith('CUSTOM:pushback:') or '@'+suffix in value.get('preset_nodes',{}):
             points=copy.deepcopy(preview.nodes[key])
             if inserting:points.insert(index,point)
             else:points[index]=point
@@ -579,6 +642,8 @@ def open_presets(app):
     many=StandPreview(caption,lambda:preview_scene(True),lambda *a:edit_node(many,True,*a),
                       lambda *a:edit_node(many,True,*a,inserting=True),
                       lambda key,index:edit_node(many,True,key,index,None,deleting=True))
+    one.edit_radius=lambda *a:edit_node(one,False,*a,radius=True)
+    many.edit_radius=lambda *a:edit_node(many,True,*a,radius=True)
     for panel,preview,form in ((single_panel,one,single),(multi_panel,many,multi)):
         selected_style=W.QGroupBox(caption('所选作业区配色','Selected work zone colours'))
         fields=W.QFormLayout(selected_style)
@@ -687,6 +752,7 @@ def open_presets(app):
     for ctrl in (lead,stand_type,side,zone,overlap,saved,multi_saved):
         ctrl.currentIndexChanged.connect(schedule)
     safety.toggled.connect(schedule)
+    single_number.toggled.connect(schedule)
     for fields in styles.values():
         fields[0].colorChanged.connect(schedule)
         fields[1].colorChanged.connect(schedule)

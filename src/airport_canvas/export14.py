@@ -12,26 +12,28 @@ def extent_with_boards(scene,items):
             max(e[2] for e in extents),max(e[3] for e in extents))
 
 
-def export(scene,path,kind='png',width=2400,dpi=150,transparent=False,box=None,labels=False,facilities=True,protection=False,scale_bar=False,progress=None,board_enlarged=False,mode="MAP",bundle=False,project_name="机场项目"):
+def export(scene,path,kind='png',width=2400,dpi=150,transparent=False,box=None,labels=False,facilities=True,protection=False,scale_bar=False,progress=None,board_enlarged=False,mode="MAP",bundle=False,project_name="机场项目",*,base_items=None):
     import scene_render as sr
     from export_modes21 import MODES,mode_items
     if bundle:
         from tempfile import TemporaryDirectory
         from zipfile import ZipFile,ZIP_DEFLATED
+        base_items=sr.display_list(scene,labels,facilities,protection,board_enlarged=board_enlarged)
         with TemporaryDirectory() as directory, ZipFile(path,'w',ZIP_DEFLATED) as archive:
             for index,key in enumerate(MODES):
                 file = Path(directory)/('output.'+kind)
                 callback = (lambda n,label,i=index:progress((i+n/100)*100/len(MODES),label)) if progress else None
                 size = export(scene,file,kind,width,dpi,transparent,box,labels,facilities,
-                              protection,scale_bar,callback,board_enlarged,key)
+                              protection,scale_bar,callback,board_enlarged,key,base_items=base_items)
                 archive.write(file,export_filename(project_name,key,size,kind))
         return size
     if mode=='F8':
         import chart_f8 as chart
         regular=sr.display_list(scene) if chart.settings(scene).get('visible',{}).get('MARKING') else ()
         items,kinds=chart.chart_items(scene,regular)
-        region=box or chart.saved_region(scene,items)
         config=chart.settings(scene).get('page',{})
+        items=chart.layout_items(items,config.get('airport_rotation',0.))
+        region=box or chart.saved_region(scene,items)
         region=chart.adjust_region(region,config)
         box=chart.page_box(region,config)
         size=dimensions(box,width)
@@ -42,7 +44,8 @@ def export(scene,path,kind='png',width=2400,dpi=150,transparent=False,box=None,l
         background='#ffffff'
         scale_bar=False
     else:
-        items=sr.display_list(scene,labels,facilities,protection,board_enlarged=board_enlarged)
+        items=(sr.display_list(scene,labels,facilities,protection,board_enlarged=board_enlarged)
+               if base_items is None else [dict(item) for item in base_items])
         items,animated = mode_items(scene,mode,items)
         box=box or mode_extent(scene,items);size=dimensions(box,width)
         background = '#101922' if mode=='F7' else sr.COLORS['background']

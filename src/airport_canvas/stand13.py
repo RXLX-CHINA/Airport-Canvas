@@ -203,10 +203,15 @@ def merged_work_zone_hatches(zones,marks):
         width=item['width']
         pitch=props.get('spacing',2)+width
         fill=unary_union(shapes[i] for i in component)
+        # Use one stand-relative orientation and a shared origin for the union.
+        angle=props.get('hatch_angle',45)
+        origin=fill.centroid
+        radians=math.radians(angle)
+        phase=-origin.x*math.sin(radians)+origin.y*math.cos(radians)
         generated=[]
         for area in polygons(fill):
             holes=unary_union(Polygon(ring) for ring in area.interiors)
-            for segment in hatch_segments(list(area.exterior.coords)[:-1],pitch):
+            for segment in hatch_segments(list(area.exterior.coords)[:-1],pitch,angle,phase):
                 clipped=lines(LineString(segment).difference(holes)) if not holes.is_empty else ()
                 strokes=([list(q) for q in line.coords] for line in clipped) if not holes.is_empty else (segment,)
                 generated.extend(dict(type='line',oid=oid,points=stroke,stroke=item.get('work_zone_color',item['stroke']),width=width,dash=None)
@@ -268,16 +273,21 @@ def merge_work_zone_outlines(scene,items,marks):
             for part in replacements.get(index,(item,))]
 
 
-def clip_work_zones_at_stands(items,marks):
+def clip_work_zones_at_stands(items,marks,bridge_polygons=()):
     from geometry11 import LineString,Point,STRtree,lines,polygon,unary_union
-    shapes=[polygon(mark['points']) for mark in marks.values()
-            if mark['props'].get('mark_type')=='STAND_SAFETY']
-    if not shapes:return items
+    safety=[mark for mark in marks.values() if mark['props'].get('mark_type')=='STAND_SAFETY']
+    shapes=[polygon(mark['points']) for mark in safety]
     tree=STRtree(shapes)
+    bridge_shapes=[polygon(m['points']) for m in marks.values()
+                   if m['props'].get('mark_type') in ('BRIDGE_AREA','BRIDGE_COMPOSITE')]
+    bridge_shapes.extend(polygon(points) for points in bridge_polygons)
+    bridge_tree=STRtree(bridge_shapes)
     result=[]
     for item in items:
         mark=marks.get(item['oid'],{})
-        if mark.get('props',{}).get('mark_type') not in ('WORK_WAIT','TEMP_WAIT'):
+        kind=mark.get('props',{}).get('mark_type')
+        bridge=kind in ('BRIDGE_AREA','BRIDGE_COMPOSITE')
+        if (not bridge and kind not in ('WORK_WAIT','TEMP_WAIT')) or item.get('bridge_home'):
             result.append(item)
             continue
         points=item['points']
@@ -292,7 +302,10 @@ def clip_work_zones_at_stands(items,marks):
             geometry=LineString(points+[points[0]] if item['type']=='polygon' else points)
             margin=item.get('width',.1)/2
         nearby=tree.query(geometry.buffer(margin) if margin else geometry)
-        blockers=[shapes[i] for i in nearby]
+        owner=mark.get('owner')
+        blockers=[shapes[i] for i in nearby if not bridge or not owner or safety[i].get('owner')!=owner]
+        if not bridge:
+            blockers.extend(bridge_shapes[i] for i in bridge_tree.query(geometry.buffer(margin) if margin else geometry))
         if not blockers:
             result.append(item)
             continue

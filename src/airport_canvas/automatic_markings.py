@@ -129,6 +129,7 @@ def remove_runway_instruction_markings(scene):
 
 def generated_markings(scene,apply_overrides=True,*,stand_designs=None):
     result={}
+    lead_crossings=None
     def add(owner,key,pts,suffix='',**p):
         a=synthetic(owner,key,pts,suffix,**p);result[a['id']]=a;return a
     for aid,a in scene.assets.items():
@@ -139,7 +140,9 @@ def generated_markings(scene,apply_overrides=True,*,stand_designs=None):
             length=g.length(pts);u=g.unit(pts[0],pts[-1]);q=pts[-1]
             if p.get('helicopter_stand'):
                 from stand15 import rounded_lead
-                add(aid,'LEAD_IN',rounded_lead(a),'HELIPAD_LEAD_IN',line_width=max(.15,p.get('lead_width',.15)))
+                lead=rounded_lead(a)
+                if stand_designs is not None:stand_designs[aid]={'paths':[{'points':lead}]}
+                add(aid,'LEAD_IN',lead,'HELIPAD_LEAD_IN',line_width=max(.15,p.get('lead_width',.15)))
                 add(aid,'HELIPAD',[q,[q[k]+u[k]*10 for k in (0,1)]],'HELIPAD',
                     width=p.get('aircraft_span',12),number=p.get('stand_number') or a['name'])
                 continue
@@ -151,6 +154,20 @@ def generated_markings(scene,apply_overrides=True,*,stand_designs=None):
             result.update(bridge(a,scene))
             from stand13 import support
             result.update(support(scene,a))
+            if lead_crossings is None:
+                from stand15 import LeadCrossings
+                lead_crossings=LeadCrossings(scene)
+            if not p.get('closed'):
+                for suffix,path,toward_stand,crossing in lead_crossings.curves(a,design.get('full_paths15',())):
+                    guide=add(aid,'LEAD_IN',path,suffix,line_width=max(.15,p.get('lead_width',.15)),
+                              lead_crossing_hidden=not crossing['visible'])
+                    guide['lead_crossing']=crossing
+                    if (crossing['visible'] and toward_stand and p.get('crossing_stand_numbers',True)
+                            and p.get('show_number',True) and not p.get('ga_stand')):
+                        origin,direction=g.at(path,g.length(path)*.5)
+                        add(aid,'STAND_NUMBER',[origin,[x+10*u for x,u in zip(origin,direction)]],
+                            'CROSS_NUMBER:'+suffix,text=p.get('stand_number') or a['name'],
+                            text_height=p.get('number_height',4.),rectangular_number=p.get('lead_type')=='ICAO')
             arrow=p.get('lead_type')=='ICAO'
             for part in design['paths']:
                 suffix='LEAD_IN' if part['key']=='ALIGN' else 'LEAD_BRANCH:'+part['key']
@@ -158,12 +175,12 @@ def generated_markings(scene,apply_overrides=True,*,stand_designs=None):
                 arrow=False
             from stand13 import preset_polygon
             extra_types={'lead':'LEAD_IN','combined_lead':'LEAD_IN','icao_aux_lead':'ICAO_AUX_LEAD','work':'WORK_WAIT',
-                         'temporary':'TEMP_WAIT','bridge':'BRIDGE_COMPOSITE'}
+                         'temporary':'TEMP_WAIT','bridge':'BRIDGE_COMPOSITE','pushback':'PUSHBACK'}
             for key in p.get('preset_shapes',{}):
                 family,separator,_=key.partition(':')
                 if separator and family in extra_types:
                     add(aid,extra_types[family],preset_polygon(a,key,[]),'CUSTOM:'+key,
-                        line_width=.15 if family.endswith('lead') else .1,stand_part=True)
+                        line_width=.15 if family.endswith('lead') or family=='pushback' else .1,stand_part=True)
             if p.get('show_number',True) and not p.get('ga_stand'):
                 for i,n in enumerate(design['numbers']):
                     origin=n['point'];direction=n['direction']
@@ -259,19 +276,47 @@ def generated_markings(scene,apply_overrides=True,*,stand_designs=None):
         stand=scene.assets.get(owner,{})
         overrides=stand.get('props',{}).get('preset_nodes',{})
         suffix=oid.removeprefix('AUTO:'+owner+':')
+        relative=None
+        centreline=False
+        if suffix.startswith('CUSTOM:pushback:'):
+            relative=overrides.get('centreline-relative:'+suffix)
+            centreline=relative is not None
+            if relative is None:
+                relative=overrides.get('relative:'+suffix)
         absolute=overrides.get('@'+suffix)
-        if absolute==[]:
+        if relative==[] or (relative is None and absolute==[]):
             del result[oid]
             continue
-        if absolute:
+        if relative is not None:
+            from stand_pushback import relative_coordinates
+            mark['points']=relative_coordinates(scene,stand,relative,restore=True,centreline=centreline)
+        elif absolute:
             from stand13 import preset_polygon
             mark['points']=preset_polygon(dict(stand,props=dict(stand['props'],preset_shapes={suffix:absolute})),suffix,[])
-            continue
-        edits=overrides.get(suffix)
-        if not edits or len(edits)!=len(mark['points']):continue
-        _,u,v=frame(stand)
-        mark['points']=[[x+du*u[0]+dv*v[0],y+du*u[1]+dv*v[1]]
-                        for (x,y),(du,dv) in zip(mark['points'],edits)]
+        else:
+            edits=overrides.get(suffix)
+            if edits and len(edits)==len(mark['points']):
+                _,u,v=frame(stand)
+                mark['points']=[[x+du*u[0]+dv*v[0],y+du*u[1]+dv*v[1]]
+                                for (x,y),(du,dv) in zip(mark['points'],edits)]
+        if suffix.startswith('CUSTOM:pushback:'):
+            from stand_pushback import rounded_path
+            vertices=mark['points']
+            if overrides.get('snap:'+suffix) and len(vertices)>=2:
+                props=stand['props']
+                from model20 import axis as taxiway_axis
+                parent=taxiway_axis(scene,props.get('entry_asset'))
+                axis=parent['points'] if parent and props.get('entry_attached',True) else None
+                if owner.startswith('A-preview-'):
+                    x,y=stand['points'][0]
+                    axis=[[x,y-10000],[x,y+10000]]
+                if axis:
+                    _,_,endpoint=g.project(axis,vertices[-1])
+                    if endpoint is not None:
+                        vertices=[*vertices[:-1],endpoint]
+            mark['design_vertices']=vertices
+            mark['corner_radii']=dict(overrides.get('radius:'+suffix,()))
+            mark['points']=rounded_path(mark['design_vertices'],mark['corner_radii'])
     if apply_overrides:
         for oid,data in scene.data.get('generated_overrides',{}).items():
             if oid not in result:continue
@@ -287,6 +332,26 @@ def generated_markings(scene,apply_overrides=True,*,stand_designs=None):
             p=a['points'][0];angle=math.radians(data.get('rotation',0));scale=data.get('scale',1);c=math.cos(angle)*scale;s=math.sin(angle)*scale
             a['points']=[[p[0]+(q[0]-p[0])*c-(q[1]-p[1])*s+data.get('dx',0),p[1]+(q[0]-p[0])*s+(q[1]-p[1])*c+data.get('dy',0)] for q in a['points']]
             a['props'].update(data.get('props',{}));a['name']=data.get('name',a['name'])
+    for mark in result.values():
+        owner=scene.assets.get(mark['owner'],{})
+        if owner.get('kind')=='STAND':
+            from stand11 import frame
+            _,forward,_=frame(owner)
+            angle=math.atan2(forward[1],forward[0])+math.pi/4
+            x,y=owner['points'][-1]
+            mark['props'].update(hatch_angle=math.degrees(angle),
+                                 hatch_phase=-x*math.sin(angle)+y*math.cos(angle))
+    for oid,mark in list(result.items()):
+        if 'corner_radii' not in mark or len(mark['points'])<2:
+            continue
+        owner=mark['owner']
+        suffix=oid.removeprefix('AUTO:'+owner+':')
+        end=mark['points'][-1]
+        direction=g.unit(mark['points'][-2],end)
+        stop=synthetic(owner,'PUSH_WAIT',[end,[x+d for x,d in zip(end,direction)]],
+                       'PUSH_WAIT:'+suffix,width=2,line_width=.15,stand_part=True)
+        stop['pushback_parent']=oid
+        result[stop['id']]=stop
     for oid,board in no_entry_boards(scene,(*result.values(),*scene.assets.values())).items():
         if not apply_overrides or not scene.data['generated_overrides'].get(oid,{}).get('hidden'):
             result[oid]=board

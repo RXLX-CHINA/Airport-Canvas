@@ -210,9 +210,21 @@ def junction_arm(points,station,sign,half_width=0.):
     return heading or (1.,0.),reach
 
 
+def rapid_junction(scene,a,b):
+    for route,other in ((a,b),(b,a)):
+        if route['props'].get('rapid_exit') or route['props'].get('rapid_drawn_axis56'):
+            if other['kind']=='RUNWAY':return 'runway',route
+            if other['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE'):
+                return 'taxi',route
+    return None,None
+
+
 def fillets(scene,junction,outer=False):
     routes=route_objects(scene);a,b=[routes[k] for k in junction['assets']];r=min(a['props'].get('fillet_radius',25),b['props'].get('fillet_radius',25))
     pa,pb=a['props'],b['props'];shoulder=min(shoulder_width(a['kind'],pa),shoulder_width(b['kind'],pb))
+    side,rapid=rapid_junction(scene,a,b)
+    if side=='runway':return []
+    if side=='taxi':r=rapid['props'].get('reverse_surface_radius') or rapid['props'].get('reverse_join_radius') or r
     r=max(.5,r-shoulder) if outer else r
     wa=pa['width']/2+(shoulder_width(a['kind'],pa) if outer else 0)
     wb=pb['width']/2+(shoulder_width(b['kind'],pb) if outer else 0)
@@ -248,6 +260,26 @@ def fillets(scene,junction,outer=False):
     return patches
 
 def turn_guides(scene,junction,visible_only=True,endpoint_budgets=None):
+    routes=route_objects(scene)
+    a,b=[routes[aid] for aid in junction['assets']]
+    def rapid_exit(route):
+        props=route['props']
+        return (props.get('rapid_exit') or props.get('rapid_drawn_axis56')
+                or scene.movements.get(route['id'],{}).get('role')=='RAPID_EXIT')
+    if rapid_exit(a) and rapid_exit(b):
+        for runway in routes.values():
+            if runway['kind']!='RUNWAY':continue
+            start,end=runway['points']
+            u=g.unit(start,end)
+            x,y=(q-o for q,o in zip(junction['point'],start))
+            if (0<=x*u[0]+y*u[1]<=g.distance(start,end)
+                    and abs(x*u[1]-y*u[0])<=runway['props']['width']/2):
+                return []
+    side,rapid=rapid_junction(scene,a,b)
+    if side=='runway':return []
+    if side=='taxi' and rapid['props'].get('rapid_geometry39',{}).get('drawn_axis39'):
+        # The authored fillet and its reverse branch already describe this join.
+        return []
     if endpoint_budgets is None and any(scene.assets.get(aid,{}).get('props',{}).get('terminal_backup13') for aid in junction['assets']):
         candidate=rounded_terminal_joins(scene,crossings(scene))[1].get(junction['id'])
         if candidate:
@@ -261,9 +293,11 @@ def turn_guides(scene,junction,visible_only=True,endpoint_budgets=None):
     for oid in junction['assets']:
         m=scene.movements.get(oid)
         if m and any(other in (m['from']['asset'],m['to']['asset']) for other in junction['assets'] if other!=oid):return []
-    routes=route_objects(scene);a,b=[routes[k] for k in junction['assets']];result=[]
+    result=[]
     config=scene.data.get('junctions',{}).get(junction['id'],{})
+    side,rapid=rapid_junction(scene,a,b)
     radius=config.get('radius',min(a['props'].get('turn_radius',25),b['props'].get('turn_radius',25)))
+    if side=='taxi':radius=rapid['props'].get('reverse_join_radius') or radius
     visible=config.get('guides',{})
     for side_a in (-1,1):
         for side_b in (-1,1):

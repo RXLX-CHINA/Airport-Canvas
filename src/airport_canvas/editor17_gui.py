@@ -49,6 +49,8 @@ class Editor17(Editor15):
             if hasattr(self,"grid_visible"):self.draw_grid7()
             # Never replace render_items or feed simplified geometry to its renderer.
             c.itemconfigure('map',state='hidden')
+            if not getattr(getattr(self,'view_tools21_2',None),'active',False):
+                self.draw_f6_buildings17()
             for tag in ('overlay','frame11','semantic14','corner_handles12','cut_preview11','snap_cursor'):c.delete(tag)
             self._frame_box11=None;self._handles14=[]
             palette=seg.colors(self.scene)
@@ -67,6 +69,12 @@ class Editor17(Editor15):
                 c.create_rectangle(*box,fill='#21303e' if dark else '#ffffff',outline=palette[label],tags='color17')
                 c.create_text(x,y,text=label,font=('Segoe UI',11,'bold'),fill='#edf5fc' if dark else '#172b38',tags='color17')
             c.create_text(14,14,text='彩色编号显示  ·  F6返回机场图',anchor='nw',fill='#172b38',font=('Microsoft YaHei',10),tags='color17');self.draw_scale14()
+            if self.points and self.mode in ('RUNWAY','APRON','PROTECTION','EQUIPMENT','CLOSED_AREA'):
+                points=[self.screen(p) for p in self.points]
+                for x,y in points:
+                    c.create_oval(x-4,y-4,x+4,y+4,fill='#0f9ebb',outline='white',tags='color17')
+                if len(points)>1:
+                    c.create_line(*[v for p in points for v in p],fill='#0f9ebb',width=2,dash=(5,3),tags='color17')
         else:
             c.itemconfigure('map',state='normal');super().redraw()
         p=self.route17.pending
@@ -81,6 +89,23 @@ class Editor17(Editor15):
                     lo,hi=(hit['station'],g.length(a['points'])) if hit['keep']=='START' else (0,hit['station']);pts=g.subpath(a['points'],lo,hi)
                     if len(pts)>1:c.create_line(*[v for q in pts for v in self.screen(q)],fill='#d94444',width=4,dash=(7,4),tags='route_preview17')
         if self._shear15:c.itemconfigure('owner:'+self._shear15['aid'],state='hidden');c.tag_raise('shear_preview15')
+    def draw_f6_buildings17(self):
+        canvas=self.canvas
+        hidden=self.scene.data['meta'].get('object_display',{})
+        for oid,asset in self.scene.assets.items():
+            if asset['kind'] not in ('RUNWAY','APRON') and not asset['props'].get('building_role19'):
+                continue
+            style=hidden.get(oid,{})
+            if style.get('hidden') or style.get('opacity',1)<=0:
+                continue
+            points=asset['points']
+            if asset['kind']=='RUNWAY':
+                points=g.rectangle(points,asset['props']['width'])
+            if len(points)<3:continue
+            canvas.create_polygon(*[v for p in points for v in self.screen(p)],
+                                  fill='',outline='#788a9a',width=2 if oid==self.selection else 1,
+                                  tags=('color17','f6_object17','f6_owner20_2:'+oid))
+
     def update_inspector(self):
         if getattr(self,'mode',None)=='SPLIT7':return self.route_inspector17()
         super().update_inspector()
@@ -170,8 +195,9 @@ class Editor17(Editor15):
             self._hover17=None;self.refresh()
         except (KeyError,ValueError) as exc:self.status.set(str(exc))
     def click(self,e):
-        if self._color17 and self.mode=='SELECT' and not self._space11:
-            hit=self.taxi_hit11(self.world(e.x,e.y));self.select(hit[1] if hit else None);return
+        if self._color17 and self.mode=='SELECT' and not self._space11 and not self.__dict__.get('_common_display_tool',False):
+            hit=self.taxi_hit11(self.world(e.x,e.y))
+            if hit:self.select(hit[1]);return
         if self.mode=='SPLIT7' and not self._space11:
             hit=self.taxi_hit11(self.world(e.x,e.y))
             if hit:

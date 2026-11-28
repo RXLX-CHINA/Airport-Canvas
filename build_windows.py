@@ -13,7 +13,7 @@ SOURCE = ROOT / 'src' / 'airport_canvas'
 BUILD = ROOT / 'build'
 DIST = BUILD / 'gui.dist'
 RELEASE = ROOT / 'release'
-VERSION = '1.2'
+VERSION = '1.3'
 
 
 def main():
@@ -36,7 +36,7 @@ def main():
     assets += ['USER_GUIDE.md', 'SOFTWARE_OVERVIEW.md', 'CHANGELOG.md', 'QUICK_START.md', 'QUICK_START_EN.md', 'FEATURES.md', 'FEATURES_EN.md', 'VERSION.json', 'LICENSE.md']
     command = [sys.executable, '-m', 'nuitka', '--mode=standalone', '--enable-plugin=pyside6',
                '--msvc=latest', '--windows-console-mode=disable', '--windows-icon-from-ico=AirportCanvas.ico',
-               '--product-name=Airport Canvas', '--company-name=刃下狼血', '--product-version=1.2.0.0',
+               '--product-name=Airport Canvas', '--company-name=刃下狼血', f'--product-version={VERSION}.0.0',
                '--output-filename=AirportCanvas.exe', f'--output-dir={BUILD}',
                f'--report={BUILD / "nuitka-report.xml"}']
     command.extend(f'--include-module={name}' for name in config['dynamic_imports'])

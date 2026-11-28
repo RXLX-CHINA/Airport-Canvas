@@ -17,6 +17,8 @@ class LightingView(C.QObject):
         self.anchor = None
         self.selected = None
         self.cache_key = None
+        self.approach_edit=self.approach_drag=self.approach_selected=None
+        self.custom_drag=None
         self.animated_items = {}
         self.animation_timer = C.QTimer(app.q)
         self.animation_timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -70,9 +72,7 @@ class LightingView(C.QObject):
         if self.active:
             self.leave()
         else:
-            if self.app._color17:
-                self.app.toggle_color17(False)
-            self.app.set_mode('SELECT')
+            self.app.prepare_display_mode()
             self.active = True
             W.QApplication.instance().installEventFilter(self)
             parent = self.inspector.parentWidget()
@@ -87,8 +87,6 @@ class LightingView(C.QObject):
             self.tabs.setTabVisible(self.tree_index, True)
             self.normal_tab = self.tabs.currentWidget()
             self.tabs.setCurrentWidget(self.palette)
-            for tab in self.original_tabs:
-                self.tabs.setTabVisible(self.tabs.indexOf(tab), False)
             self.sync()
             self.show_properties()
             self.app.status.set('点选灯光后在右侧编辑属性，按 F7 返回')
@@ -110,6 +108,7 @@ class LightingView(C.QObject):
         self.animated_items.clear()
         self.action.setChecked(False)
         self.tool = self.anchor = None
+        self.stop_approach()
         for tab in self.original_tabs:
             self.tabs.setTabVisible(self.tabs.indexOf(tab), True)
         if self.normal_tab in self.original_tabs:
@@ -124,6 +123,7 @@ class LightingView(C.QObject):
             self.app.redraw()
 
     def choose(self, key):
+        self.app.set_mode('SELECT')
         self.tool, self.anchor = key, None
         self.pause_animation()
         self.app.canvas.focus_set()
@@ -135,6 +135,7 @@ class LightingView(C.QObject):
         key = (id(scene), id(scene.data), scene.revision)
         if self.cache_key == key:
             return
+        if self.approach_edit and self.cache_key and self.cache_key[0]!=id(scene):self.stop_approach()
         self.cache_key = key
         from lighting_closures import lighting_closures
         self.closures = lighting_closures(scene)
@@ -145,8 +146,14 @@ class LightingView(C.QObject):
         for control in (self.animation_switch,self.animation_action):
             with C.QSignalBlocker(control):
                 control.setChecked(enabled)
-        self.lamps = {key: list(model.fixtures(row)) for key, row in self.rows.items()
-                      if row[-1].get('enabled', True)}
+        styles=scene.data['meta'].get('object_display',{})
+        def visible(row):
+            owner=row[2]['id'] if row[2] is not None else row[0]
+            style=styles.get(owner,{})
+            return row[-1].get('enabled',True) and not style.get('hidden') and style.get('opacity')!=0
+        self.lamps = {key: list(model.fixtures(row)) for key, row in self.rows.items() if visible(row)}
+        self.visible_owners={self.rows[key][2]['id'] for key,lamps in self.lamps.items()
+                             if lamps and self.rows[key][2] is not None}
         self.cache_base_geometry()
         self.tree_items = {}
         if self.selected not in self.rows:
@@ -166,7 +173,9 @@ class LightingView(C.QObject):
 
     def select(self, key):
         if key != self.selected:
+            self.stop_approach()
             self.selected = key
+            if self.app.mode=='NODES':self.approach_edit=key
             with C.QSignalBlocker(self.tree):
                 self.tree.setCurrentItem(self.tree_items.get(key))
             self.show_properties()
@@ -252,6 +261,7 @@ class LightingView(C.QObject):
         reset.clicked.connect(lambda: self.change_properties(key,{},reset=True))
         form.addRow(reset)
         for field,widget in fields.items():
+            if field!='enabled' and key not in self.lamps:widget.setEnabled(False)
             def changed(*_, field=field, widget=widget):
                 if isinstance(widget,W.QComboBox):
                     value = widget.currentData()
@@ -313,8 +323,229 @@ class LightingView(C.QObject):
         C.QTimer.singleShot(0,self.show_properties)
         self.app.redraw()
 
+    def approach_record(self):
+        row=self.rows.get(self.approach_edit) if self.approach_edit in self.lamps else None
+        if row and row[3]=='approach':return row
+
+    def save_approach(self,record,**changes):
+        if all(record[-1].get(key,0.)==value for key,value in changes.items()):return
+        with self.app.scene.transaction('编辑进近灯光中轴'):
+            rows=self.app.scene.data['meta'].setdefault('lighting_f7',{}).setdefault('runways',{})
+            rows.setdefault(record[0],{}).update(changes)
+        self.app.update_title()
+        self.app.redraw()
+
+    def approach_geometry(self,record,override=None,radii=None):
+        from lighting_model import approach_axis,approach_frame
+        options=record[-1]
+        if override is not None:options=dict(options,axis_nodes=override)
+        if radii is not None:options=dict(options,axis_radii=radii)
+        controls,path=approach_axis(options)
+        origin,outward,normal=approach_frame(record[2],record[4])
+        def world(local):
+            x,y=local
+            return [p+x*u+y*v for p,u,v in zip(origin,outward,normal)]
+        return [world(p) for p in controls],[world(p) for p in path]
+
+    def draw_approach(self,nodes=None,radii=None):
+        canvas=self.app.canvas
+        tag='lighting_approach'
+        canvas.delete(tag)
+        record=self.approach_record()
+        if record is None:
+            self.draw_custom_nodes()
+            return
+        if record[-1]['length']<=0:return
+        controls,path=self.approach_geometry(record,nodes,radii)
+        canvas.create_line(*[v for q in path for v in self.app.screen(q)],
+                           fill='#07869a',dash=(5,4),width=2,tags=tag)
+        for index,q in enumerate(controls[1:]):
+            x,y=self.app.screen(q)
+            color='#f69b29' if index==self.approach_selected else '#ffffff'
+            canvas.create_oval(x-5,y-5,x+5,y+5,fill=color,outline='#07869a',width=2,tags=tag)
+
+        for index,anchor,handle,_ in self.approach_handles(record,controls,radii):
+            x,y=handle
+            canvas.create_line(*anchor,x,y,fill='#efa945',width=1,tags=tag)
+            canvas.create_oval(x-4,y-4,x+4,y+4,fill='#efa945',outline='#583915',tags=tag)
+
+    def approach_handles(self,record,controls,radii=None):
+        options=record[-1]
+        if radii is None:radii=options.get('axis_radii',{})
+        for index,point in enumerate(controls[1:-1],1):
+            anchor=self.app.screen(point)
+            incoming=geometry.unit(anchor,self.app.screen(controls[index-1]))
+            radius=radii.get(str(index),options.get('axis_radius') or 60.)
+            reach=16+min(34,radius*self.app.zoom*.35)
+            handle=[x+d*reach for x,d in zip(anchor,incoming)]
+            yield index,anchor,handle,incoming
+
+    def approach_local(self,record,point):
+        from lighting_model import approach_frame
+        origin,outward,normal=approach_frame(record[2],record[4])
+        delta=[p-q for p,q in zip(point,origin)]
+        return sum(a*b for a,b in zip(delta,outward))/record[-1]['length'],sum(a*b for a,b in zip(delta,normal))
+
+    def approach_insert_target(self,x,y):
+        record=self.approach_record()
+        if record is None or record[-1]['length']<=0:return None
+        _,path=self.approach_geometry(record)
+        _,_,snap=geometry.project(path,self.app.world(x,y))
+        if snap is None or math.dist(self.app.screen(snap),(x,y))>10:return None
+        fraction,_=self.approach_local(record,snap)
+        gap=min(.1,.2/record[-1]['length'])
+        if gap<fraction<1-gap and all(abs(fraction-q[0])>gap for q in record[-1].get('axis_nodes',())):
+            return snap
+        return None
+
+    def click_approach(self,event,record):
+        options=record[-1]
+        if options['length']<=0:return 'break'
+        controls,_=self.approach_geometry(record)
+        nodes=[list(p) for p in options.get('axis_nodes',())]
+        if getattr(event,'state',0)&8:
+            snap=self.approach_insert_target(event.x,event.y)
+            if snap is not None:
+                fraction,offset=self.approach_local(record,snap)
+                nodes.append([fraction,offset])
+                nodes.sort()
+                self.approach_selected=nodes.index([fraction,offset])
+                at=self.approach_selected+1
+                radii={str(i+(i>=at)):r for key,r in options.get('axis_radii',{}).items() for i in [int(key)]}
+                radii[str(at)]=options.get('axis_radius') or 60.
+                self.save_approach(record,axis_nodes=nodes,axis_radii=radii)
+        else:
+            mouse=(event.x,event.y)
+            radii=options.get('axis_radii',{}).copy()
+            for index,_,handle,direction in self.approach_handles(record,controls,radii):
+                if math.dist(handle,mouse)<=8:
+                    self.approach_selected=index-1
+                    radii.setdefault(str(index),options.get('axis_radius') or 60.)
+                    self.approach_drag=(record,index,nodes,mouse,direction,radii)
+                    self.draw_approach()
+                    return 'break'
+            distance,index=min((math.dist(self.app.screen(q),(event.x,event.y)),i)
+                               for i,q in enumerate(controls[1:]))
+            self.approach_selected=index if distance<=9 else None
+            if self.approach_selected is not None:
+                if index==len(nodes):nodes.append([1.,0.])
+                self.approach_drag=(record,index,nodes,(event.x,event.y),None,radii)
+            self.draw_approach()
+        return 'break'
+
+    def approach_candidate(self,event):
+        record,index,original,start,direction,radii=self.approach_drag
+        if direction is not None:
+            delta=sum(u*(b-a) for u,a,b in zip(direction,start,(event.x,event.y)))
+            result=radii.copy()
+            result[str(index)]=max(.1,min(10000.,radii[str(index)]+delta/max(.001,self.app.zoom*.35)))
+            return original,result
+        nodes=[p.copy() for p in original]
+        fraction,offset=self.approach_local(record,self.app.world(event.x,event.y))
+        gap=min(.1,.2/record[-1]['length'])
+        low=(nodes[index-1][0] if index else 0.)+gap
+        high=(nodes[index+1][0] if index+1<len(nodes) else 1.)-gap
+        nodes[index]=[1. if original[index][0]==1. else max(low,min(fraction,high)),offset]
+        try:model.approach_axis(dict(record[-1],axis_nodes=nodes,axis_radii=radii),strict=True)
+        except ValueError:return original,radii
+        return nodes,radii
+
+    def custom_points(self):
+        row=self.rows.get(self.approach_edit)
+        if row and self.approach_edit in self.lamps and row[2] is None:return row[-1].get('points')
+        return None
+
+    def draw_custom_nodes(self,points=None):
+        points=self.custom_points() if points is None else points
+        if not points:return
+        canvas=self.app.canvas
+        tag='lighting_approach'
+        canvas.delete(tag)
+        coords=[self.app.screen(q) for q in points]
+        if len(coords)>1:
+            canvas.create_line(*[v for p in coords for v in p],fill='#07869a',dash=(5,4),tags=tag)
+        for index,(x,y) in enumerate(coords):
+            color='#f69b29' if index==self.approach_selected else '#ffffff'
+            canvas.create_oval(x-5,y-5,x+5,y+5,fill=color,outline='#07869a',width=2,tags=tag)
+
+    def custom_candidate(self,event):
+        index,original,_=self.custom_drag
+        points=list(original)
+        points[index]=self.app.world(event.x,event.y)
+        if any(geometry.distance(a,b)<.05 for a,b in zip(points,points[1:])):return original
+        return points
+
+    def stop_approach(self):
+        self.approach_edit=self.approach_drag=self.approach_selected=self.custom_drag=None
+        self.app.canvas.delete('lighting_approach')
+
+    def motion(self,event):
+        if self.approach_drag:self.draw_approach(*self.approach_candidate(event))
+        elif self.custom_drag:self.draw_custom_nodes(self.custom_candidate(event))
+        return 'break'
+
+    def release(self,event):
+        if self.custom_drag:
+            points=self.custom_candidate(event)
+            original=self.custom_drag[1]
+            self.custom_drag=None
+            if points!=original:self.change_properties(self.selected,{'points':points})
+            self.draw_approach()
+        if self.approach_drag:
+            record,_,_,press,_,_=self.approach_drag
+            nodes,radii=self.approach_candidate(event)
+            self.approach_drag=None
+            if math.dist(press,(event.x,event.y))>=3:self.save_approach(record,axis_nodes=nodes,axis_radii=radii)
+            else:self.draw_approach()
+        return 'break'
+
+    def delete_node(self):
+        if self.app.mode=='SELECT':
+            row=self.rows.get(self.selected)
+            if self.selected in self.lamps and row:
+                if row[2] is None:
+                    self.change_properties(self.selected,{},reset=True)
+                    self.select(None)
+                else:self.change_properties(self.selected,{'enabled':False})
+            return 'break'
+        points=self.custom_points()
+        index=self.approach_selected
+        if points and len(points)>2 and index is not None and index<len(points):
+            self.approach_selected=None
+            self.change_properties(self.selected,{'points':points[:index]+points[index+1:]})
+            return 'break'
+        record=self.approach_record()
+        if record is not None and self.approach_selected is not None:
+            nodes=list(record[-1].get('axis_nodes',()))
+            if self.approach_selected<len(nodes):
+                at=self.approach_selected+1
+                nodes.pop(self.approach_selected)
+                radii={str(i-(i>at)):r for key,r in record[-1].get('axis_radii',{}).items()
+                       for i in [int(key)] if i!=at}
+                self.approach_selected=None
+                self.save_approach(record,axis_nodes=nodes,axis_radii=radii)
+        return 'break'
+
     def click(self, event):
+        record=self.approach_record()
+        if record is not None:return self.click_approach(event,record)
         q = self.app.world(event.x,event.y)
+        points=self.custom_points()
+        if points:
+            if getattr(event,'state',0)&8:
+                from node_interaction20_8 import edge_insertion
+                hit=edge_insertion(points,q,10/max(.001,self.app.zoom))
+                if hit:
+                    index,point=hit
+                    self.approach_selected=index
+                    self.change_properties(self.selected,{'points':points[:index]+[point]+points[index:]})
+                    return 'break'
+            distance,index=min((math.dist(self.app.screen(p),(event.x,event.y)),i) for i,p in enumerate(points))
+            if distance<=9:
+                self.approach_selected=index
+                self.custom_drag=(index,points,(event.x,event.y))
+                self.draw_custom_nodes()
+                return 'break'
         if self.tool is None:
             radius = 8/max(.001,self.app.zoom)
             hits = [(distance,key) for key, lights in self.lamps.items() for point, _, _, _ in lights
@@ -336,6 +567,7 @@ class LightingView(C.QObject):
             limit = 14/max(.001,self.app.zoom)
             matches = []
             for route in routes(scene).values():
+                if not all(self.app.can_edit_object(oid) for oid in route['props'].get('guidance_parents',(route['id'],))):continue
                 a, b = [geometry.project(route['points'], pt) for pt in path]
                 if max(a[0], b[0]) <= limit and abs(a[1]-b[1]) > .05:
                     matches.append((a[0]+b[0], route['id'], a[1], b[1], route['points']))
@@ -359,7 +591,7 @@ class LightingView(C.QObject):
         from export_modes21 import lighting_wireframe
         self.base_paths,self.base_labels = lighting_wireframe(self.app.scene,self.rows.values(),self.closures[0])
 
-    def redraw(self):
+    def redraw(self,editing=False):
         previous = self.cache_key
         self.sync()
         if previous != self.cache_key:
@@ -371,8 +603,8 @@ class LightingView(C.QObject):
         canvas.itemconfigure('map',state='hidden')
         for item,_ in app.__dict__.get('_bitmap_items',{}).values():
             item.hide()
-        for tag in ('overlay','frame11','view_mode18','north23','bitmap46','color17',
-                    'movement_names20','snap_cursor','semantic14','corner_handles12','cut_preview11'):
+        for tag in (() if editing else ('overlay','frame11','view_mode18','north23','bitmap46','color17',
+                    'movement_names20','snap_cursor','semantic14','corner_handles12','cut_preview11')):
             canvas.delete(tag)
         dark = app._dark_mode24
         app._dark_mode24 = True
@@ -447,6 +679,7 @@ class LightingView(C.QObject):
                                                      fill='#a12739',outline='#ff8490',tags=tag)
                 canvas.tag_lower(background,item)
         canvas.tag_raise('north23')
+        self.draw_approach()
 
     def set_high_traffic(self, enabled):
         with self.app.scene.transaction('设置灯光方案交通密度'):

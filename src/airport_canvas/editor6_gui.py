@@ -54,7 +54,7 @@ class Editor6(CurveEditor):
     def pointer(self,e):
         super().pointer(e);self.canvas.delete('snap_cursor');self._snap_hit=None
         if self.mode not in TAXI_KINDS and self.mode not in ('NODES','CONNECT','MARK:INTERMEDIATE_POINT','MARK:HOLD_B'):return
-        p=self.world(e.x,e.y);self._snap_hit=snap(self.scene,p,max(.02,12/self.zoom))
+        p=self.world(e.x,e.y);self._snap_hit=snap(self.scene,p,max(.02,12/self.zoom),visible=self.can_edit_object)
         if self._snap_hit:
             x,y=self.screen(self._snap_hit[3]);c=self.canvas
             c.create_oval(x-7,y-7,x+7,y+7,outline='#ec4b7c',width=2,tags='snap_cursor')
@@ -70,7 +70,7 @@ class Editor6(CurveEditor):
             from marking_catalog import primitives
             candidates=[]
             for aid,a in getattr(self,'auto_assets',{}).items():
-                if a['props']['mark_type'] not in ('STAND_STOP','UNGUIDED_STOP'):continue
+                if not self.can_edit_object(aid) or a['props']['mark_type'] not in ('STAND_STOP','UNGUIDED_STOP'):continue
                 for item in primitives(a):
                     if item['type']=='line':
                         d,s,q=g.project(item['points'],p)
@@ -127,7 +127,7 @@ class Editor6(CurveEditor):
                 self.selection=self.scene.create_asset('APRON','停止道',g.rectangle(self.points,45),surface_role='STOPWAY',pavement_color='#655e50');self.points=[];self.set_mode('SELECT');self.refresh()
             return
         if self.mode in ('MARK:INTERMEDIATE_POINT','MARK:HOLD_B'):
-            hit=snap(self.scene,p,max(10/self.zoom,15))
+            hit=snap(self.scene,p,max(10/self.zoom,15),visible=self.can_edit_object)
             if hit:
                 a=self.scene.assets[hit[1]];q,u=g.at(a['points'],hit[2]);self.selection=self.scene.create_marking(self.mode[5:],[q,[q[k]+u[k]*10 for k in (0,1)]],width=a['props']['width'],black_outline=self.scene.data['meta'].get('guidance_black_outline',False));self.set_mode('SELECT');self.refresh();return
         super().click(e)

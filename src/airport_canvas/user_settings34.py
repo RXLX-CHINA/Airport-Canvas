@@ -69,6 +69,8 @@ def save(app,filename):
     if meta.get('nav_position') is not None:
         config['display']['nav_position']=','.join(str(round(x)) for x in meta['nav_position'])
     config['editing']['continuous_drawing']=str(bool(app.repeat.get()))
+    if hasattr(app,'multicore_enabled'):
+        config['editing']['multicore_enabled']=str(app.multicore_enabled)
     if hasattr(app,'autosave_timer'):
         config['editing'].update(autosave=str(app.autosave_enabled),autosave_minutes=str(app.autosave_minutes))
     if hasattr(app,'drawing_presets'):

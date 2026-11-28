@@ -8,8 +8,28 @@ from interface_language import tr
 
 UNITS={'米 (m)':1.,'厘米 (cm)':.01,'毫米 (mm)':.001,'千米 (km)':1000.,
        '英尺 (ft)':.3048,'英寸 (in)':.0254}
-MAX_PIXELS=24_000_000
-MAX_ENCODED=12_000_000
+MAX_PIXELS=100_000_000
+MAX_ENCODED=96_000_000
+PREVIEW_PIXELS=4_000_000
+
+
+def preview_size(size):
+    from PySide6.QtCore import QSize
+    pixels=size.width()*size.height()
+    if pixels<=PREVIEW_PIXELS:return size
+    ratio=math.sqrt(PREVIEW_PIXELS/pixels)
+    return QSize(max(1,int(size.width()*ratio)),max(1,int(size.height()*ratio)))
+
+
+def read_image(reader):
+    # Qt's default allocation cap can reject a valid large image after the header check.
+    from PySide6.QtGui import QImageReader
+    limit=QImageReader.allocationLimit()
+    try:
+        if 0<limit<768:QImageReader.setAllocationLimit(768)
+        return reader.read()
+    finally:
+        if QImageReader.allocationLimit()!=limit:QImageReader.setAllocationLimit(limit)
 
 def layers(scene):
     return scene.data.get('bitmap_layers',{})
@@ -37,10 +57,20 @@ def validate(data):
 
 def add(scene,name,image,scale,center,rotation=0.):
     from PySide6.QtCore import QByteArray,QBuffer,QIODevice
-    encoded=QByteArray()
-    buffer=QBuffer(encoded)
-    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-    if not image.save(buffer,'PNG'):raise ValueError('无法编码位图')
+    if image.isNull() or image.width()*image.height()>MAX_PIXELS:
+        raise ValueError('位图尺寸无效')
+    remaining=MAX_ENCODED-sum(len(row['png']) for row in layers(scene).values())
+    def encode(format,quality=-1):
+        encoded=QByteArray()
+        buffer=QBuffer(encoded)
+        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        if not image.save(buffer,format,quality):raise ValueError('无法编码位图')
+        return encoded
+    encoded=encode('PNG')
+    if (len(encoded)+2)//3*4>remaining and not image.hasAlphaChannel():
+        encoded=encode('JPEG',95)
+    if (len(encoded)+2)//3*4>remaining:
+        raise ValueError('工程内嵌位图已超过上限，请减少底图或缩小分辨率。')
     oid='bitmap-'+uuid.uuid4().hex
     row=dict(name=name,png=base64.b64encode(bytes(encoded)).decode('ascii'),
              width=image.width(),height=image.height(),scale=scale,
@@ -69,17 +99,18 @@ def contains(row,point):
     return (abs(x*cos+y*sin)<=row['width']*row['scale']/2 and
             abs(-x*sin+y*cos)<=row['height']*row['scale']/2)
 
-def pixmap(row):
+def pixmap(row,preview=False):
     from PySide6.QtCore import QByteArray,QBuffer,QIODevice
     from PySide6.QtGui import QImageReader,QPixmap
     try:content=QByteArray(base64.b64decode(row['png'],validate=True))
     except ValueError:return QPixmap()
     buffer=QBuffer(content)
     buffer.open(QIODevice.OpenModeFlag.ReadOnly)
-    reader=QImageReader(buffer,b'PNG')
+    reader=QImageReader(buffer)
     size=reader.size()
     if size.width()!=row['width'] or size.height()!=row['height']:return QPixmap()
-    return QPixmap.fromImage(reader.read())
+    if preview:reader.setScaledSize(preview_size(size))
+    return QPixmap.fromImage(read_image(reader))
 
 def draw(editor):
     from PySide6.QtCore import Qt
@@ -93,7 +124,9 @@ def draw(editor):
     ids=dict.fromkeys([*order,*records])
     for index,oid in enumerate(key for key in ids if key in records):
         row=records[oid]
-        signature=(row['png'],row['width'],row['height'])
+        pixels=row['width']*row['height']
+        use_preview=pixels>PREVIEW_PIXELS and editor.zoom*row['scale']<=math.sqrt(PREVIEW_PIXELS/pixels)
+        signature=(row['png'],row['width'],row['height'],use_preview)
         if oid not in cache:
             item=QGraphicsPixmapItem()
             item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
@@ -102,18 +135,26 @@ def draw(editor):
             cache[oid]=(item,None)
         item,previous=cache[oid]
         if previous!=signature:
-            item.setPixmap(pixmap(row))
-            item.setOffset(-row['width']/2,-row['height']/2)
+            picture=pixmap(row,preview=use_preview)
+            item.setPixmap(picture)
+            item.setOffset(-picture.width()/2,-picture.height()/2)
             cache[oid]=(item,signature)
+        picture=item.pixmap()
+        sx=row['width']/max(1,picture.width())*row['scale']
+        sy=row['height']/max(1,picture.height())*row['scale']
         item.setPos(row['x'],row['y'])
-        item.setTransform(QTransform().rotate(row['rotation']).scale(row['scale'],-row['scale']))
+        item.setTransform(QTransform().rotate(row['rotation']).scale(sx,-sy))
         item.setOpacity(row['opacity'])
         item.setVisible(not editor.scene.data['meta'].get('object_display',{}).get(oid,{}).get('hidden'))
         item.setZValue(-9e8+index)
 
-def settings(parent,image,existing=None,rotation=0.):
+def settings(parent,image,existing=None,rotation=0.,original_size=None,true_north=0.):
     from PySide6 import QtGui,QtCore,QtWidgets as W
     Qt=QtCore.Qt
+    if image.isNull():return None
+    original_size=original_size or image.size()
+    scale_x=original_size.width()/image.width()
+    scale_y=original_size.height()/image.height()
 
     class MeasureView(W.QGraphicsView):
         def __init__(self):
@@ -127,6 +168,11 @@ def settings(parent,image,existing=None,rotation=0.):
             pen=self.line.pen()
             pen.setCosmetic(True)
             self.line.setPen(pen)
+            self.north_arrow=W.QGraphicsPathItem(self.bitmap)
+            arrow_pen=QtGui.QPen(QtGui.QColor('#c6381f'),2)
+            arrow_pen.setCosmetic(True)
+            self.north_arrow.setPen(arrow_pen)
+            self.north_points=()
             self.points=()
             self.setMouseTracking(True)
             self.enabled=False
@@ -156,6 +202,24 @@ def settings(parent,image,existing=None,rotation=0.):
             elif self.points:
                 self.line.setLine(QtCore.QLineF(self.points[0],preview or self.points[0]))
             self.line.setVisible(self.enabled and bool(self.points))
+
+        def show_north(self,preview=None):
+            path=QtGui.QPainterPath()
+            if self.north_points:
+                tail=self.north_points[0]
+                tip=self.north_points[1] if len(self.north_points)==2 else preview or tail
+                path.moveTo(tail)
+                path.lineTo(tip)
+                dx,dy=tip.x()-tail.x(),tip.y()-tail.y()
+                length=math.hypot(dx,dy)
+                if length:
+                    size=min(length*.24,max(image.width(),image.height())*.035)
+                    ux,uy=dx/length,dy/length
+                    for side in (-1,1):
+                        path.moveTo(tip)
+                        path.lineTo(tip.x()-size*(ux+side*.52*uy),
+                                    tip.y()-size*(uy-side*.52*ux))
+            self.north_arrow.setPath(path)
 
         def wheelEvent(self,event):
             factor=1.15**(event.angleDelta().y()/120)
@@ -188,6 +252,23 @@ def settings(parent,image,existing=None,rotation=0.):
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
                 event.accept()
                 return
+            if north.isChecked() and event.button()==Qt.MouseButton.LeftButton:
+                self.setFocus()
+                point=self.point(event)
+                if len(self.north_points)==1:
+                    tail=self.north_points[0]
+                    if point==tail:return
+                    bearing=math.degrees(math.atan2((point.x()-tail.x())*scale_x,
+                                                     (tail.y()-point.y())*scale_y))
+                    rotation=(bearing-true_north+180)%360-180
+                    points=(tail,point)
+                else:
+                    rotation=angle.value()
+                    points=(point,)
+                history.push(CalibrationChange((self.north_points,angle.value()),
+                                               (points,rotation),apply_north))
+                event.accept()
+                return
             if self.enabled and event.button()==Qt.MouseButton.LeftButton:
                 self.setFocus()
                 point=self.point(event)
@@ -210,7 +291,11 @@ def settings(parent,image,existing=None,rotation=0.):
                     bar.setValue(bar.value()-amount)
                 event.accept()
                 return
-            if self.enabled and len(self.points)==1:
+            if north.isChecked() and len(self.north_points)==1:
+                self.show_north(self.point(event))
+                event.accept()
+                return
+            if self.enabled and not north.isChecked() and len(self.points)==1:
                 self.show_measurement(self.point(event))
                 event.accept()
             else:super().mouseMoveEvent(event)
@@ -260,6 +345,8 @@ def settings(parent,image,existing=None,rotation=0.):
     angle.setSuffix(' °')
     angle.setValue(rotation)
     row.addRow(tr('旋转角度'),angle)
+    north=W.QCheckBox(tr('绘制真北箭头（先点箭尾，再点箭头）'))
+    row.addRow(north)
     committed_angle=rotation
 
     def preview_rotation(value):
@@ -268,12 +355,20 @@ def settings(parent,image,existing=None,rotation=0.):
 
     def apply_angle(value):
         nonlocal committed_angle
-        committed_angle=value
         angle.setValue(value)
+        committed_angle=angle.value()
 
     def commit_angle():
         if angle.value()!=committed_angle:
             history.push(CalibrationChange(committed_angle,angle.value(),apply_angle))
+
+    def apply_north(state):
+        points,value=state
+        view.north_points=points
+        apply_angle(value)
+        view.show_north()
+        if len(points)==2 and north.isChecked():north.setChecked(False)
+        sync()
 
     angle.valueChanged.connect(preview_rotation)
     angle.editingFinished.connect(commit_angle)
@@ -285,7 +380,9 @@ def settings(parent,image,existing=None,rotation=0.):
 
     def measured_length():
         if not view.enabled:return 1.
-        return QtCore.QLineF(*view.points).length() if len(view.points)==2 else 0.
+        if len(view.points)!=2:return 0.
+        a,b=view.points
+        return math.hypot((b.x()-a.x())*scale_x,(b.y()-a.y())*scale_y)
 
     def apply_points(points):
         view.points=points
@@ -293,14 +390,17 @@ def settings(parent,image,existing=None,rotation=0.):
 
     def sync(*_):
         view.enabled=mode.currentIndex()==1
-        view.setCursor(Qt.CursorShape.CrossCursor if view.enabled else Qt.CursorShape.ArrowCursor)
+        view.setCursor(Qt.CursorShape.CrossCursor if view.enabled or north.isChecked() else Qt.CursorShape.ArrowCursor)
         view.show_measurement()
         length=measured_length()
         buttons.button(W.QDialogButtonBox.StandardButton.Ok).setEnabled(length>0)
         text=(tr('比例 {scale:.8g} 米/像素').format(scale=amount.value()*unit.currentData()/length)
               if length else tr('在位图上点击终点。' if view.points else '在位图上点击起点。'))
+        if north.isChecked():
+            text=tr('在位图上点真北箭头的顶端。' if len(view.north_points)==1 else '在位图上点真北箭头的起点。')
         feedback.setText(text)
 
+    north.toggled.connect(sync)
     mode.currentIndexChanged.connect(sync);amount.valueChanged.connect(sync);unit.currentIndexChanged.connect(sync)
     sync()
     if dialog.exec()!=W.QDialog.DialogCode.Accepted:return None
@@ -309,6 +409,7 @@ def settings(parent,image,existing=None,rotation=0.):
     return amount.value()*unit.currentData()/length,angle.value()
 
 def import_image(editor,filename=None):
+    from PySide6.QtCore import Qt
     from PySide6.QtGui import QImageReader,QPixmap
     from PySide6.QtWidgets import QFileDialog,QMessageBox
     if filename is None:filename,_=QFileDialog.getOpenFileName(editor.q,tr('导入位图'),'',tr('位图 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)'))
@@ -316,11 +417,14 @@ def import_image(editor,filename=None):
     reader=QImageReader(filename);reader.setAutoTransform(True)
     size=reader.size()
     if not size.isValid() or size.width()*size.height()>MAX_PIXELS:
-        QMessageBox.warning(editor.q,tr('导入位图'),tr('无法识别该图片，或图片超过 2400 万像素。'));return
-    image=reader.read()
+        QMessageBox.warning(editor.q,tr('导入位图'),tr('无法识别该图片，或图片超过 1 亿像素。'));return
+    image=read_image(reader)
     if image.isNull():
         QMessageBox.warning(editor.q,tr('导入位图'),reader.errorString());return
-    calibration=settings(editor.q,QPixmap.fromImage(image))
+    del reader
+    preview=image.scaled(preview_size(image.size()),mode=Qt.TransformationMode.SmoothTransformation)
+    true_north=-float(editor.scene.data['meta'].get('grid_north_true_heading',0) or 0)
+    calibration=settings(editor.q,QPixmap.fromImage(preview),original_size=image.size(),true_north=true_north)
     if calibration is None:return
     scale,rotation=calibration
     viewport=editor.canvas.q.viewport()
@@ -367,7 +471,10 @@ def inspector(editor,oid):
     def rescale():
         current=layers(editor.scene).get(oid)
         if not current or current['locked']:return
-        calibration=settings(editor.q,pixmap(current),current['scale'],current['rotation'])
+        from PySide6.QtCore import QSize
+        calibration=settings(editor.q,pixmap(current,preview=True),current['scale'],current['rotation'],
+                             QSize(current['width'],current['height']),
+                             -float(editor.scene.data['meta'].get('grid_north_true_heading',0) or 0))
         if calibration is not None:
             scale,rotation=calibration
             change(scale=scale,rotation=rotation)

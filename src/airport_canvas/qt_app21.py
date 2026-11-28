@@ -11,6 +11,7 @@ from view_tools21_2 import ViewTools, rotate
 
 class AirportApp(Editor20):
     def refresh(self,*args,**kwargs):
+        self.scene.multicore_enabled=self.multicore_enabled
         if self._stand_zone_style:
             self.scene.data['meta'].setdefault('stand_zone_style',self._stand_zone_style)
         return super().refresh(*args,**kwargs)
@@ -22,6 +23,8 @@ class AirportApp(Editor20):
         migrate(self._preferences34)
         import json
         config=read(self._preferences34)
+        try:self.multicore_enabled=config.getboolean('editing','multicore_enabled',fallback=True)
+        except ValueError:self.multicore_enabled=True
         try:
             styles=json.loads(config.get('display','stand_zone_style',fallback='{}'))
             self._stand_zone_style=styles if isinstance(styles,dict) else {}
@@ -40,6 +43,8 @@ class AirportApp(Editor20):
         self.view_tools21_2 = ViewTools(self)
         from lighting_view import LightingView
         self.lighting_view = LightingView(self)
+        from project_statistics import ProjectStatistics
+        self.project_statistics = ProjectStatistics(self)
         from chart_view_f8 import ChartView
         self.chart_view = ChartView(self)
         from node_preview import AltHover
@@ -106,6 +111,17 @@ class AirportApp(Editor20):
             pass
         self.autosave_timer=QTimer(self.q)
         self.autosave_timer.timeout.connect(self.autosave_project)
+        self._recovery_file=None
+        self._recovery_lock=None
+        self._recovery_scene=None
+        self._recovery_revision=None
+        self._watchdog=None
+        self._watchdog_scene=self.scene
+        self.scene.on_commit=self.publish_recovery
+        self._heartbeat_timer=QTimer(self.q)
+        self._heartbeat_timer.setInterval(2000)
+        self._heartbeat_timer.timeout.connect(self.recovery_heartbeat)
+        self._heartbeat_timer.start()
         self.configure_autosave()
         file_menu=self.q.menuBar().actions()[0].menu()
         self.recent_projects_menu=file_menu.addMenu('最近使用')
@@ -125,6 +141,7 @@ class AirportApp(Editor20):
         from PySide6.QtWidgets import QToolButton
         from stand_names65 import stand_overlap_icon
         overlap_button=ttk.Button(toolbar,command=self.start_stand_overlap)
+        self.action_buttons11['STAND_OVERLAP']=overlap_button
         overlap_button.q.setIcon(stand_overlap_icon())
         overlap_button.q.setToolTip('编辑机位相交区域')
         overlap_button.q.setAccessibleName('编辑机位相交区域')
@@ -135,6 +152,7 @@ class AirportApp(Editor20):
         outline.setMenu(self.view_tools21_2.outlines_menu)
         outline.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         toolbar.q.layout().addWidget(outline)
+        self.outline_tool21=outline
         ttk.Checkbutton(toolbar,text='连续绘制',variable=self.repeat).pack(side='left',padx=8)
         for button in toolbar.pack_slaves():
             if button.cget('image'):
@@ -281,7 +299,7 @@ class AirportApp(Editor20):
             return None
         selected=set(self.selected_ids)|set(self.tree.selection())
         kind=signature(self.selection)
-        return sorted(oid for oid in selected if kind is not None and signature(oid)==kind)
+        return sorted(oid for oid in selected if kind is not None and signature(oid)==kind and self.can_edit_object(oid))
 
     def batch_parameters(self,ids,primary):
         from PySide6.QtWidgets import QInputDialog
@@ -364,10 +382,22 @@ class AirportApp(Editor20):
         variants=getattr(self,'drawing_presets',{})
         key=getattr(self,'_prefab19',None) or mode
         preset=variants.get(key)
-        if isinstance(preset,dict) and preset:
-            current=self.preset_defaults(mode,current)
+        current=self.preset_defaults(mode,current)
+        if isinstance(preset,dict):
             current.update(preset)
         return current
+
+    def remember_drawing_values(self,key,values):
+        from user_settings34 import read,write
+        if self.drawing_presets.get(key)==values:return
+        self.drawing_presets[key]=dict(values)
+        try:
+            config=read(self._preferences34)
+            if 'editing' not in config:config.add_section('editing')
+            import json
+            config['editing']['drawing_presets']=json.dumps(self.drawing_presets,ensure_ascii=False)
+            write(config,self._preferences34)
+        except OSError as exc:self.status.set(tr('无法保存绘制预设')+' '+str(exc))
 
     def edit_drawing_preset(self):
         from PySide6.QtWidgets import QInputDialog,QDialog,QDialogButtonBox,QFormLayout,QLineEdit,QCheckBox,QComboBox
@@ -431,9 +461,7 @@ class AirportApp(Editor20):
                     parsed[field]=control.currentData() or control.currentText()
                 else:
                     parsed[field]=type(values[field])(control.text().strip())
-            self.drawing_presets[key]=parsed
-            from user_settings34 import path,save
-            save(self,path())
+            self.remember_drawing_values(key,parsed)
             self.status.set('已保存绘制工具预设。')
         except (ValueError,OSError) as error:self.status.set('无法保存预设 '+str(error))
 
@@ -470,6 +498,7 @@ class AirportApp(Editor20):
     def configure_autosave(self):
         self.autosave_timer.stop()
         if self.autosave_enabled:self.autosave_timer.start(self.autosave_minutes*60_000)
+        else:self.clear_recovery()
 
     def populate_recent_projects(self):
         from user_settings34 import recent_projects
@@ -492,6 +521,7 @@ class AirportApp(Editor20):
 
     @contextmanager
     def opening_project(self, filename):
+        self.finish_project_loading()
         from qt_core21 import C,W,Qt
         text = tr(f'正在导入“{Path(filename).name}”……')
         viewport = self.canvas.q.viewport()
@@ -507,6 +537,7 @@ class AirportApp(Editor20):
         badge.setFixedWidth(width)
         badge.adjustSize()
         badge.move((viewport.width()-badge.width())//2,(viewport.height()-badge.height())//2)
+        self._opening_badge=badge
         with self.processing(text):
             badge.show()
             badge.raise_()
@@ -514,9 +545,20 @@ class AirportApp(Editor20):
             W.QApplication.processEvents(C.QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
             try:
                 yield
-            finally:
-                badge.hide()
-                badge.deleteLater()
+            except BaseException:
+                self.finish_project_loading()
+                raise
+            else:
+                if getattr(self,'_fit_after_open',None) is not self.scene:
+                    self.finish_project_loading(painted=True)
+
+    def finish_project_loading(self, *, painted=False):
+        badge=self.__dict__.pop('_opening_badge',None)
+        if badge is not None:
+            if painted:
+                self.canvas.q.viewport().repaint()
+            badge.hide()
+            badge.deleteLater()
 
     def open(self,filename=None):
         previous=self.scene
@@ -530,25 +572,134 @@ class AirportApp(Editor20):
 
     def save(self,save_as=False):
         result=super().save(save_as)
-        if result:self.remember_current_project()
+        if result:
+            self.clear_recovery()
+            self.remember_current_project()
         return result
 
-    def autosave_project(self):
-        import json
-        from user_settings34 import path
-        if not self.autosave_enabled or getattr(self,'drag',None) or getattr(self,'_processing_tasks',None):
-            return
-        if json.dumps(self.scene.data,sort_keys=True)==self.saved:
-            return
-        original=self.filepath
-        target=(original.with_name(original.stem+'.autosave.ACP') if original and not original.stem.endswith('.autosave')
-                else path().parent/'Untitled.autosave.ACP')
+    @staticmethod
+    def recovery_directory():
+        from qt_core21 import C
+        return Path(C.QStandardPaths.writableLocation(
+            C.QStandardPaths.StandardLocation.AppLocalDataLocation))/'Airport Canvas'/'Recovery'
+
+    def publish_recovery(self,scene):
+        if not self.autosave_enabled or scene is not self.scene:return
+        if self._watchdog is not None and self._watchdog.failed:
+            self._watchdog.stop()
+            self._watchdog=None
         try:
-            target.parent.mkdir(parents=True,exist_ok=True)
-            self.scene.save(target)
-            self.status.set('自动保存副本 '+str(target))
+            if self._watchdog is None:
+                from uuid import uuid4
+                from recovery_watchdog import RecoveryWatchdog
+                directory=self.recovery_directory()
+                directory.mkdir(parents=True,exist_ok=True)
+                name=self.filepath.stem if self.filepath else 'Untitled'
+                self._watchdog=RecoveryWatchdog(directory/f'{name[:60]}-{uuid4().hex}.ACP')
+            self._watchdog.publish(scene.data)
+        except (OSError,RuntimeError) as exc:
+            self.status.set(tr('Autosave failed')+' '+str(exc))
+
+    def recovery_heartbeat(self):
+        if self._watchdog is not None:
+            self._watchdog.beat()
+
+    def clear_recovery(self):
+        if self._watchdog is not None:
+            self._watchdog.stop()
+            self._watchdog=None
+        if self._recovery_file is None:return
+        try:
+            self._recovery_file.unlink(missing_ok=True)
+        except OSError as exc:
+            self.status.set(tr('无法清理自动恢复副本')+' '+str(exc))
+        finally:
+            self._recovery_lock.unlock()
+            self._recovery_file=None
+            self._recovery_lock=None
+            self._recovery_revision=None
+
+    def autosave_project(self):
+        from uuid import uuid4
+        from qt_core21 import C
+        if (not self.autosave_enabled or self.scene._transaction_depth
+                or getattr(self,'drag',None) or getattr(self,'_processing_tasks',None)):
+            return
+        if self._watchdog is not None and not self._watchdog.failed:
+            if self.dirty():
+                self._watchdog.beat(flush=True)
+            else:
+                self.clear_recovery()
+            return
+        if self._recovery_scene is not self.scene:
+            self.clear_recovery()
+            self._recovery_scene=self.scene
+        revision=self.scene.revision
+        if self._recovery_revision==revision:return
+        if not self.dirty():
+            self.clear_recovery()
+            return
+        try:
+            if self._recovery_file is None:
+                directory=self.recovery_directory()
+                directory.mkdir(parents=True,exist_ok=True)
+                name=self.filepath.stem if self.filepath else 'Untitled'
+                target=directory/f'{name[:60]}-{uuid4().hex}.ACP'
+                lock=C.QLockFile(str(target)+'.lock')
+                lock.setStaleLockTime(0)
+                if not lock.tryLock(0):raise OSError(lock.error())
+                self._recovery_file,self._recovery_lock=target,lock
+            self.scene.save(self._recovery_file)
+            self._recovery_revision=revision
         except (OSError,ValueError) as exc:
-            self.status.set('自动保存失败 '+str(exc))
+            self.status.set(tr('自动保存失败')+' '+str(exc))
+
+    def offer_recovery(self):
+        from qt_core21 import C,W
+        directory=self.recovery_directory()
+        while True:
+            try:
+                candidates=sorted(directory.glob('*.ACP'),key=lambda p:p.stat().st_mtime,reverse=True)
+            except OSError:
+                return False
+            if not candidates:return False
+            newest=None
+            for candidate in candidates:
+                lock=C.QLockFile(str(candidate)+'.lock')
+                lock.setStaleLockTime(0)
+                if lock.tryLock(0):
+                    newest=candidate
+                    break
+            if newest is None:return False
+            try:
+                box=W.QMessageBox(self.q)
+                box.setWindowTitle(tr('恢复未保存的工程'))
+                box.setText(tr('发现上次未保存的工程副本。恢复后可另存为新的 ACP 文件。'))
+                box.setInformativeText(newest.stem.rsplit('-',1)[0]+' · '+
+                                       C.QDateTime.fromSecsSinceEpoch(int(newest.stat().st_mtime)).toString('yyyy-MM-dd HH:mm:ss'))
+                restore=box.addButton(tr('恢复'),W.QMessageBox.ButtonRole.AcceptRole)
+                discard=box.addButton(tr('删除副本'),W.QMessageBox.ButtonRole.DestructiveRole)
+                box.addButton(tr('稍后'),W.QMessageBox.ButtonRole.RejectRole)
+                box.exec()
+                if box.clickedButton() is discard:
+                    newest.unlink(missing_ok=True)
+                    continue
+                if box.clickedButton() is not restore:return False
+                previous=self.scene
+                super().open(newest)
+                if self.scene is previous:return False
+                self.filepath=None
+                self.saved=''
+                self._recovery_file,self._recovery_lock=newest,lock
+                self._recovery_scene=self.scene
+                self._recovery_revision=self.scene.revision
+                self.update_title()
+                return True
+            except OSError as exc:
+                self.status.set(tr('无法打开恢复副本')+' '+str(exc))
+                return False
+            finally:
+                if self._recovery_lock is not lock:lock.unlock()
 
     def confirm_leave(self):
         data=self.scene.data
@@ -565,6 +716,7 @@ class AirportApp(Editor20):
             except OSError as exc:
                 import warnings
                 warnings.warn(f'无法保存习惯设置：{exc}',RuntimeWarning)
+        self.clear_recovery()
         self.destroy()
         if self.__dict__.get('_owns_mainloop'):application().quit()
 
@@ -576,6 +728,10 @@ class AirportApp(Editor20):
         if localizer:application().removeEventFilter(localizer)
         timer=self.__dict__.get('autosave_timer')
         if timer:timer.stop()
+        heartbeat=self.__dict__.get('_heartbeat_timer')
+        if heartbeat:heartbeat.stop()
+        watchdog=self.__dict__.get('_watchdog')
+        if watchdog:watchdog.stop()
         export=self.__dict__.get('_export_cancel')
         if export:export.set()
         super().destroy()
@@ -611,6 +767,7 @@ class AirportApp(Editor20):
         return [self.origin[0]+dx,self.origin[1]+dy]
 
     def fit(self):
+        if getattr(self,'_fit_after_open',None) is self.scene:return
         chart=self.__dict__.get('chart_view')
         if chart and chart.active:
             chart.ensure()
@@ -639,13 +796,19 @@ class AirportApp(Editor20):
                 return row.click(row.preview_event)
             return 'break'
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active:return chart.finish()
+        if chart and chart.active and not self.common_tool_active():return chart.finish()
+        if self.lighting_view.active and not self.common_tool_active():return 'break'
         return super().finish_draw()
 
     def tree_select(self,event=None):
         if not self._syncing_tree and self.tree.selection():
             from bitmap_layers46 import layers
             oid=self.tree.selection()[0]
+            if self.active_special_view():
+                if not self.can_edit_object(oid):
+                    self.select(None)
+                    return
+                if not self.common_tool_active():self.set_mode('SELECT')
             if oid in layers(self.scene):
                 if oid!=self.__dict__.get('_bitmap_selection46'):
                     self.select_bitmap46(oid)
@@ -669,6 +832,7 @@ class AirportApp(Editor20):
         self.redraw()
 
     def select(self,oid):
+        if oid and not self.can_edit_object(oid):oid=None
         if oid!=self.selection:self._selected_edit_node=None
         if self.__dict__.pop('_bitmap_selection46',None):
             self._selected_form=object()
@@ -676,7 +840,6 @@ class AirportApp(Editor20):
 
     def start_stand_overlap(self):
         self.set_mode('SELECT')
-        if self._color17:self.toggle_color17()
         self.selected_ids=set()
         self.select(None)
         self._stand_overlap_scene=self.scene
@@ -694,7 +857,7 @@ class AirportApp(Editor20):
         cache=self.__dict__.get('_stand_overlap_cache')
         if not cache or cache[0]!=key:
             cache=self._stand_overlap_cache=(key,overlap_regions(self.scene,self.auto_assets))
-        return cache[1]
+        return {pair:shape for pair,shape in cache[1].items() if all(self.can_edit_object(oid) for oid in pair.split('|'))}
 
     def draw_stand_overlap_regions(self):
         from geometry11 import polygons
@@ -774,19 +937,54 @@ class AirportApp(Editor20):
             return
         inspector(self,oid)
 
+    def can_edit_object(self,oid):
+        from airport_scene import AREA_KINDS
+        from scene_hierarchy import descendants
+        scene=self.scene
+        if not super().can_edit_object(oid):return False
+        if oid.startswith('J:'):
+            first,second=oid.split(':')[1:3]
+            return self.can_edit_object(first) and self.can_edit_object(second)
+        asset=scene.assets.get(oid) or self.__dict__.get('auto_assets',{}).get(oid)
+        owner=(asset or {}).get('owner')
+        groups=scene.data.get('groups',{})
+        if oid in groups:
+            children=[key for key in descendants(scene,oid) if key in scene.assets]
+            return all(self.can_edit_object(key) for key in children) and (bool(children) or not self.active_special_view())
+        chart=self.__dict__.get('chart_view')
+        if chart and chart.active:
+            chart.ensure()
+            return oid in chart.visible_owners
+        lighting=self.__dict__.get('lighting_view')
+        if lighting and lighting.active:
+            lighting.sync()
+            return (asset is not None and asset['kind'] in AREA_KINDS|{'RUNWAY','TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE','ROAD'}
+                    or oid in scene.movements and not scene.movements[oid].get('legacy_attachment')
+                    or oid in lighting.visible_owners)
+        tools=self.__dict__.get('view_tools21_2')
+        if self._color17 or tools and tools.active:
+            if oid in scene.movements:
+                return not scene.movements[oid].get('legacy_attachment') and scene.movements[oid].get('guide_visible',True)
+            if asset is None:return False
+            if asset['kind'] in {'APRON','RUNWAY','TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE','ROAD'}:return True
+            if self._color17 and not (tools and tools.active) and asset['props'].get('building_role19'):return True
+            profile=asset['props'].get('information_profile20_18')
+            if tools and tools.active and profile:
+                return profile!='BOARD' or not scene.data['meta'].get('hide_boards21_2')
+            return bool(self._color17 and not (tools and tools.active) and scene.data['meta'].get('f6_stands20_18',True) and (asset['kind']=='STAND' or owner and
+                        scene.assets.get(owner,{}).get('kind')=='STAND'))
+        return True
+
     def pick(self,point,paths_only=False):
         hit=super().pick(point,paths_only)
-        if not hit or paths_only or self.mode not in ('SELECT','NODES'):return hit
-        oid=hit[1]
-        owner=self.auto_assets.get(oid,{}).get('owner') or oid.split(':')[0]
-        styles=self.scene.data['meta'].get('object_display',{})
-        if any(styles.get(key,{}).get('hidden') or styles.get(key,{}).get('opacity')==0 for key in (oid,owner)):
-            return None
-        return hit
+        return hit if hit and self.can_edit_object(hit[1]) else None
 
     def delete_selected(self):
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active:return chart.delete_selected()
+        if chart and chart.active and not self.common_tool_active():return chart.delete_selected()
+        lighting=self.__dict__.get('lighting_view')
+        if lighting and lighting.active and not self.common_tool_active():return lighting.delete_node()
+        if self.selection and not self.can_edit_object(self.selection):return 'break'
         if self.mode=='NODES':
             return self.delete_edit_node()
         return super().delete_selected()
@@ -842,7 +1040,7 @@ class AirportApp(Editor20):
         return 'break'
 
     def click(self,event):
-        if self.mode!='NODES' or self._space11 or self.chart_view.active or self.lighting_view.active:
+        if self.mode!='NODES' or self._space11:
             return self.click_canvas(event)
         self._selected_edit_node=None
         result=self.click_canvas(event)
@@ -863,11 +1061,63 @@ class AirportApp(Editor20):
             break
         return result
 
+    def edit_lead_crossing(self,event):
+        from qt_core21 import W
+        from pavement_geometry import crossings
+        import scene_geometry as g
+
+        point=self.world(event.x,event.y)
+        tolerance=max(30,16/self.zoom)
+        groups={}
+        for mark in self.auto_assets.values():
+            crossing=mark.get('lead_crossing')
+            if crossing and self.can_edit_object(mark['owner']):
+                groups.setdefault((mark['owner'],crossing['group']),[]).append(mark)
+        if not groups:return False
+        (owner,key),marks=min(groups.items(),key=lambda pair:g.distance(
+            pair[1][0]['lead_crossing']['point'],point))
+        info=marks[0]['lead_crossing']
+        distance=g.distance(info['point'],point)
+        if distance>=tolerance or any(g.distance(j['point'],point)<distance
+                for j in crossings(self.scene) if self.can_edit_object(j['id'])):
+            return False
+        if owner not in self.scene.assets:return False
+
+        dialog=W.QDialog(self.q)
+        dialog.setWindowTitle(tr('机位引入线岔路口'))
+        form=W.QFormLayout(dialog)
+        radius=W.QDoubleSpinBox()
+        radius.setRange(.5,1000)
+        radius.setValue(info['radius'])
+        radius.setSuffix(' m')
+        form.addRow(tr('转弯半径'),radius)
+        controls={}
+        for mark in marks:
+            crossing=mark['lead_crossing']
+            toward,side=crossing['side']
+            label=tr('转入机位') if toward>0 else tr('转向引入线入口')
+            label+=' · '+(tr('滑行道轴线起点侧') if side<0 else tr('滑行道轴线终点侧'))
+            field=W.QCheckBox(label)
+            field.setChecked(crossing['visible'])
+            form.addRow(field)
+            controls[mark['id'].removeprefix('AUTO:'+owner+':')]=field
+        buttons=W.QDialogButtonBox(W.QDialogButtonBox.StandardButton.Ok|W.QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec():
+            with self.scene.transaction('编辑机位引入线岔路口'):
+                props=self.scene.assets[owner]['props']
+                props.setdefault('lead_crossing_settings',{})[key]={
+                    'radius':radius.value(),'guides':{k:f.isChecked() for k,f in controls.items()}}
+            self.refresh()
+        return True
+
     def click_canvas(self,event):
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active and not self._space11:return chart.click(event)
+        if chart and chart.active and not self.common_tool_active() and not self._space11:return chart.click(event)
         lighting = self.__dict__.get('lighting_view')
-        if lighting and lighting.active and not self._space11:
+        if lighting and lighting.active and not self.common_tool_active() and not self._space11:
             return lighting.click(event)
         if self.stand_overlap_active() and not self._space11:
             from geometry11 import Point
@@ -883,6 +1133,8 @@ class AirportApp(Editor20):
             return 'break'
         row=self.__dict__.get('_stand_row')
         if row and not self._space11:return row.click(event)
+        if self.mode=='JUNCTION' and not self._space11 and self.edit_lead_crossing(event):
+            return 'break'
         if self.mode=='SELECT' and not self._space11 and getattr(event,'state',0)&4:
             oid=self.selection
             movement=self.scene.movements.get(oid)
@@ -904,9 +1156,10 @@ class AirportApp(Editor20):
                     self._connector_drag48=(oid,point,None)
                     return 'break'
         tools = self.__dict__.get('view_tools21_2')
-        if tools and (tools.active or tools.drawing) and not self._space11:
+        if tools and (tools.drawing or tools.active and not self.common_tool_active()) and not self._space11:
             return tools.click(event)
-        if (self.mode=='SELECT' and not self._space11 and not getattr(event,'state',0)&5
+        if (not self.active_special_view() and not self._color17 and not (tools and tools.active)
+                and self.mode=='SELECT' and not self._space11 and not getattr(event,'state',0)&5
                 and not self.selection and not getattr(self,'selected_ids',None)
                 and 'canvas' in self.__dict__):
             from bitmap_layers46 import layers,contains
@@ -923,12 +1176,30 @@ class AirportApp(Editor20):
         if self.mode=='NODES' and not self._space11:
             import math
             runway=self.scene.assets.get(self.selection)
+            hit=self.pick(self.world(event.x,event.y))
+            if not getattr(event,'state',0)&8 and (runway and runway['kind']=='RUNWAY'
+                    or hit and self.scene.assets.get(hit[1],{}).get('kind')=='RUNWAY'):
+                from curve_model import editable_vertices
+                hits=[]
+                for oid,asset in self.scene.assets.items():
+                    if asset['kind'] not in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE') or not self.can_edit_object(oid):
+                        continue
+                    for point in editable_vertices(asset):
+                        distance=math.dist(self.screen(point),(event.x,event.y))
+                        if distance<=9:
+                            hits.append((distance,oid!=self.selection,oid))
+                if hits:
+                    oid=min(hits)[2]
+                    if self.selection!=oid:
+                        self.select(oid)
+                        self.redraw()
+                    if self.begin_nodes12(event):
+                        return 'break'
             if runway and runway['kind']=='RUNWAY':
                 index=min(range(2),key=lambda i:math.dist(self.screen(runway['points'][i]),(event.x,event.y)))
                 if math.dist(self.screen(runway['points'][index]),(event.x,event.y))<=10:
                     self.runway_drag=(runway['id'],index)
                     return 'break'
-            hit=self.pick(self.world(event.x,event.y))
             if hit and self.scene.assets.get(hit[1],{}).get('kind')=='RUNWAY':
                 self.select(hit[1])
                 self.redraw()
@@ -958,11 +1229,11 @@ class AirportApp(Editor20):
 
     def motion(self,event):
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active and not (self._pan11 or self._space11):
+        if chart and chart.active and not self.common_tool_active() and not (self._pan11 or self._space11):
             return chart.drag_symbol(event)
         lighting = self.__dict__.get('lighting_view')
-        if lighting and lighting.active and not self._pan11:
-            return 'break'
+        if lighting and lighting.active and not self.common_tool_active() and not (self._pan11 or self._space11):
+            return lighting.motion(event)
         drag=self.__dict__.get('_bitmap_drag55')
         if drag:
             item=self._bitmap_items.get(drag[1])
@@ -994,11 +1265,11 @@ class AirportApp(Editor20):
 
     def release(self,event):
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active and not (self._pan11 or self._space11):
+        if chart and chart.active and not self.common_tool_active() and not (self._pan11 or self._space11):
             return chart.release_symbol(event)
         lighting = self.__dict__.get('lighting_view')
-        if lighting and lighting.active and not self._pan11:
-            return 'break'
+        if lighting and lighting.active and not self.common_tool_active() and not (self._pan11 or self._space11):
+            return lighting.release(event)
         bound=self.__dict__.pop('_connector_drag48',None)
         if bound:
             from connector_drag48 import connector_ports,slide_connector
@@ -1046,8 +1317,12 @@ class AirportApp(Editor20):
         self.canvas.delete(tag)
         if pixel is None or self._space11 or self._pan11:return
         try:
-            if self.chart_view.active:hit=self.chart_view.edge_node_target(pixel.x(),pixel.y())
-            elif self.mode=='NODES' and not self.lighting_view.active:
+            if self.chart_view.active and not self.common_tool_active():
+                hit=self.chart_view.edge_node_target(pixel.x(),pixel.y())
+            elif self.lighting_view.active and not self.common_tool_active():
+                point=self.lighting_view.approach_insert_target(pixel.x(),pixel.y())
+                hit=(point,) if point is not None else None
+            elif self.mode=='NODES':
                 hit=self.edge_node_target(pixel.x(),pixel.y())
             else:return
         except (ValueError,KeyError):
@@ -1060,7 +1335,7 @@ class AirportApp(Editor20):
 
     def pointer(self,event):
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active and not (self._pan11 or self._space11):
+        if chart and chart.active and not self.common_tool_active() and not (self._pan11 or self._space11):
             return chart.pointer(event)
         row=self.__dict__.get('_stand_row')
         if row and not self._space11:
@@ -1069,7 +1344,7 @@ class AirportApp(Editor20):
         if self.mode=='STOPWAY':
             from pavement10 import snap_stopway
             self.canvas.delete('stopway_snap34')
-            hit=snap_stopway(self.scene,self.world(event.x,event.y),self.zoom)
+            hit=snap_stopway(self.scene,self.world(event.x,event.y),self.zoom,self.can_edit_object)
             if hit:
                 _,aid,end,q=hit
                 runway=self.scene.assets[aid]
@@ -1086,23 +1361,24 @@ class AirportApp(Editor20):
                                         fill='#35bbd3',tags='stopway_snap34')
             return 'break'
         tools=self.__dict__.get('view_tools21_2')
-        if tools and (tools.active or tools.drawing):
+        if tools and (tools.drawing or tools.active and not self.common_tool_active()):
             tools.pointer(event)
         return super().pointer(event)
 
     def cancel_action(self,event=None):
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active:
+        if chart and chart.active and not self.common_tool_active():
             chart.cancel_symbol_drag()
-            if chart.tool:chart.choose(None)
+            if chart.tool or self.mode=='NODES':
+                self.set_mode('SELECT')
             else:
                 chart.selected=None
                 chart.properties()
                 chart.selection_frame()
             return 'break'
         lighting = self.__dict__.get('lighting_view')
-        if lighting and lighting.active:
-            lighting.choose(None)
+        if lighting and lighting.active and not self.common_tool_active():
+            self.set_mode('SELECT')
             return 'break'
         if self.stand_overlap_active():
             self.set_mode('SELECT')
@@ -1123,10 +1399,10 @@ class AirportApp(Editor20):
             self.canvas.delete('runway_drag')
             return 'break'
         tools = self.__dict__.get('view_tools21_2')
-        if tools and (tools.active or tools.drawing):
-            if tools.anchor:tools.reset_anchor()
-            else:tools.exit()
+        if tools and (tools.drawing or tools.active and not self.common_tool_active()):
+            tools.reset_anchor()
             return 'break'
+        if not self.gesture11() and self.return_to_linked_taxiway():return 'break'
         if getattr(event,'num',0)==3 and self.mode=='SELECT' and not self.gesture11():
             hit=self.pick(self.world(event.x,event.y))
             if hit:
@@ -1140,13 +1416,100 @@ class AirportApp(Editor20):
                     return 'break'
         return super().cancel_action(event)
 
+    def common_tool_active(self):
+        return self.__dict__.get('_common_display_tool',False)
+
+    def active_special_view(self):
+        return next((view for name in ('chart_view','lighting_view')
+                     if (view:=self.__dict__.get(name)) is not None and view.active),None)
+
+    def show_common_inspector(self,enabled):
+        view=self.active_special_view()
+        if view is None:return
+        if view is self.chart_view:
+            view.right.setVisible(not enabled)
+            hidden=view.hidden
+        else:
+            view.inspector.setVisible(not enabled)
+            hidden=view.hidden_inspector_widgets
+        for widget in hidden:widget.setVisible(enabled)
+
+    def use_display_tools(self):
+        if not self.common_tool_active():return
+        row=self.__dict__.get('_stand_row')
+        if row:row.stop()
+        tools=self.__dict__.get('view_tools21_2')
+        if tools and tools.drawing and not tools.active:tools.exit()
+        self._common_display_tool=False
+        self.show_common_inspector(False)
+        for tag in ('runway_nodes','selected_edit_node','corner_handles12','overlay',
+                    'frame11','stand_overlap_regions','insert_node_preview'):
+            self.canvas.delete(tag)
+        self.__dict__.pop('_stand_overlap_scene',None)
+        super().set_mode('SELECT')
+
+    def prepare_display_mode(self):
+        row=self.__dict__.get('_stand_row')
+        if row:row.stop()
+        self.cancel_bitmap_drag()
+        view=self.active_special_view()
+        if view:view.leave(redraw=False)
+        tools=self.__dict__.get('view_tools21_2')
+        if tools and (tools.active or tools.drawing):tools.exit()
+        if self._color17:super().toggle_color17(False)
+        self._common_display_tool=False
+        self.select(None)
+        super().set_mode('SELECT')
+
+    def tool_available(self,mode):
+        view=self.active_special_view()
+        if view is self.__dict__.get('lighting_view') and view is not None:
+            return mode in {'SELECT','NODES','UNDO','REDO','OPEN','SAVE','FIT'}
+        if view is not None or getattr(self.__dict__.get('view_tools21_2'),'active',False):
+            return mode not in {'BREAK','SPLIT7','MERGE','JET','NO_ENTRY','MANDATORY'}
+        return True
+
+    def sync_display_tools(self):
+        view=self.active_special_view()
+        page=(id(view),getattr(self.__dict__.get('view_tools21_2'),'active',False),
+              len(self.__dict__.get('tool_buttons',{})))
+        if self.__dict__.get('_toolbar_page')==page:return
+        self._toolbar_page=page
+        outline=self.__dict__.get('outline_tool21')
+        if outline:outline.setEnabled(self.tool_available('OUTLINES'))
+        for key,button in {**self.__dict__.get('tool_buttons',{}),
+                           **self.__dict__.get('action_buttons11',{})}.items():
+            button.q.setEnabled(self.tool_available(key))
+
     def set_mode(self,mode):
+        if not self.tool_available(mode):return 'break'
+        if getattr(self,'_draft11',None) and getattr(self,'_dirty_fields',None):
+            self.apply_properties()
         self._selected_edit_node=None
+        view=self.active_special_view()
+        tools=self.__dict__.get('view_tools21_2')
         chart=self.__dict__.get('chart_view')
-        if chart and chart.active:chart.leave(redraw=False)
-        lighting = self.__dict__.get('lighting_view')
-        if lighting and lighting.active:
-            lighting.leave()
+        lighting=self.__dict__.get('lighting_view')
+        native=(view is not None and (mode=='SELECT' or view is lighting or
+                mode=='NODES' and chart.selected in chart.config().get('symbols',{})))
+        if native:
+            self.use_display_tools()
+            self._common_display_tool=False
+        elif view or self._color17 or tools and tools.active:
+            self._common_display_tool=True
+        if view:
+            if view is self.chart_view:
+                view.choose(None,focus=False)
+                view.selected_vertex=None
+            else:
+                view.stop_approach()
+                view.tool=view.anchor=None
+            self.show_common_inspector(not native)
+            if view is lighting and mode=='NODES':
+                view.approach_edit=view.selected
+                self.status.set(tr('进近灯光中轴：Alt+单击插点，拖动节点，Delete 删除，Esc 退出。'))
+            elif view is chart and mode=='NODES' and chart.selected in self.scene.assets:
+                self.select(chart.selected)
         self.__dict__.pop('_stand_overlap_scene',None)
         if hasattr(self,'canvas'):
             self.canvas.delete('stand_overlap_regions')
@@ -1160,7 +1523,11 @@ class AirportApp(Editor20):
             super().set_mode('SELECT')
             tools.start(mode.partition(':')[2])
             return 'break'
-        if tools and (tools.active or tools.drawing):tools.exit()
+        if tools and tools.drawing:
+            if tools.active:
+                tools.drawing=False
+                tools.reset_anchor()
+            else:tools.exit()
         return super().set_mode(mode)
 
     def toggle_color17(self,*args):
@@ -1169,6 +1536,8 @@ class AirportApp(Editor20):
         lighting = self.__dict__.get('lighting_view')
         if lighting and lighting.active:
             lighting.leave(redraw=False)
+        self._common_display_tool=True
+        self.select(None)
         if self.stand_overlap_active():self.set_mode('SELECT')
         tools = self.__dict__.get('view_tools21_2')
         if tools and (tools.active or tools.drawing):tools.exit()
@@ -1187,20 +1556,32 @@ class AirportApp(Editor20):
         except OSError as error:self.status.set(f'无法保存深色模式设置：{error}')
         self.redraw()
 
+    def draw_runway_nodes(self):
+        self.canvas.delete('runway_nodes')
+        runway=self.scene.assets.get(self.selection)
+        if self.mode=='NODES' and runway and runway['kind']=='RUNWAY' and self.can_edit_object(self.selection):
+            for point in runway['points']:
+                x,y=self.screen(point)
+                self.canvas.create_oval(x-5,y-5,x+5,y+5,fill='#5de4ef',outline='#193942',
+                                        width=2,tags='runway_nodes')
+
     def redraw(self):
+        self.sync_display_tools()
         tools = self.__dict__.get('view_tools21_2')
         f5=bool(tools and tools.active)
         if 'canvas' in self.__dict__:
             from qt_theme21 import window_theme
             window_theme(self,self.dark_mode_enabled())
-        lighting = self.__dict__.get('lighting_view')
-        if lighting and lighting.active:
-            lighting.redraw()
-            self.update_minimap()
-            return
-        chart=self.__dict__.get('chart_view')
-        if chart and chart.active:
-            chart.redraw()
+        special=self.active_special_view()
+        if special:
+            editing=self.common_tool_active()
+            if editing:super().redraw()
+            special.redraw(editing=editing)
+            self.canvas.delete('view_mode18')
+            if editing:
+                if tools and tools.drawing:tools.render_anchor()
+                self.draw_runway_nodes()
+                self.draw_stand_overlap_regions()
             self.update_minimap()
             return
         if (f5 or self._color17) and 'canvas' in self.__dict__:
@@ -1226,13 +1607,7 @@ class AirportApp(Editor20):
                         self.canvas.delete('frame11')
                         self._frame_box11=None
         if 'canvas' in self.__dict__:
-            self.canvas.delete('runway_nodes')
-            runway=self.scene.assets.get(self.selection)
-            if self.mode=='NODES' and runway and runway['kind']=='RUNWAY':
-                for point in runway['points']:
-                    x,y=self.screen(point)
-                    self.canvas.create_oval(x-5,y-5,x+5,y+5,fill='#5de4ef',outline='#193942',
-                                            width=2,tags='runway_nodes')
+            self.draw_runway_nodes()
             from bitmap_layers46 import draw
             draw(self)
             self.draw_stand_overlap_regions()
@@ -1287,6 +1662,12 @@ class AirportApp(Editor20):
             c.create_text(x,y+26,text=caption,fill=color,font=('Microsoft YaHei',8),tags='north23')
 
     def update_title(self):
+        watched=self.__dict__.get('_watchdog_scene')
+        if watched is not None and watched is not self.scene:
+            watched.on_commit=None
+            self.clear_recovery()
+            self._watchdog_scene=self.scene
+            self.scene.on_commit=self.publish_recovery
         super().update_title()
         default_name='未命名机场'
         if not self.filepath and self.scene.data['meta']['name']==default_name:
@@ -1357,6 +1738,9 @@ class AirportApp(Editor20):
         return cached[1]
 
 def main():
+    if len(sys.argv)==3 and sys.argv[1]=='--recovery-watchdog':
+        from recovery_watchdog import watch
+        return watch(sys.argv[2])
     application()
     args=sys.argv[1:]
     from user_settings34 import path,read,apply_scene,apply_window,migrate
@@ -1368,8 +1752,10 @@ def main():
     app=AirportApp(scene)
     app._preferences34=filename
     apply_window(app,config)
-    if args and args!=['--blank']:
-        from qt_core21 import C
-        C.QTimer.singleShot(0,lambda:app.open(Path(args[0]).resolve()))
+    from qt_core21 import C
+    def open_at_startup():
+        if not app.offer_recovery() and args and args!=['--blank']:
+            app.open(Path(args[0]).resolve())
+    C.QTimer.singleShot(0,open_at_startup)
     return app.mainloop()
 if __name__=='__main__':main()

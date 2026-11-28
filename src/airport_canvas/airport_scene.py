@@ -9,6 +9,8 @@ from pathlib import Path
 import uuid
 import scene_geometry as g
 
+MAX_PROJECT_BYTES=110_000_000
+
 PATH_KINDS={'RUNWAY','TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE','STAND','ROAD'}
 AREA_KINDS={'APRON','PROTECTION','EQUIPMENT','CLOSED_AREA'}
 KINDS=PATH_KINDS|AREA_KINDS|{'MARKING'}
@@ -34,6 +36,7 @@ class AirportScene:
         self.data.setdefault('groups',{})
         self.data.setdefault('generated_overrides',{})
         self.revision=0
+        self.on_commit=None
         self.past=[];self.future=[];self._transaction_depth=0;self.validate_structure()
 
     @property
@@ -234,13 +237,26 @@ class AirportScene:
         __import__('model20').validate(self)
 
     @contextmanager
-    def transaction(self,label):
+    def transaction(self,label,*,location_only=False):
         if self._transaction_depth:
             self._transaction_depth+=1
             try:yield
             finally:self._transaction_depth-=1
             return
         old=copy.deepcopy(self.data)
+        if location_only:
+            try:
+                yield
+            except Exception:
+                self.data=old
+                raise
+            if self.data!=old:
+                self.revision+=1
+                self.past.append((label,old))
+                self.past=self.past[-80:]
+                self.future.clear()
+                if self.on_commit:self.on_commit(self)
+            return
         self._route_cache=None;self._cross_cache=None
         __import__('workspace20_18').invalidate_scene(self)
         self._transaction_depth=1
@@ -269,8 +285,9 @@ class AirportScene:
         if self.data!=old:
             self.revision+=1
             self.past.append((label,old));self.past=self.past[-80:];self.future.clear()
+            if self.on_commit:self.on_commit(self)
 
-    def move_generated_signs(self, changes):
+    def move_generated_signs(self, changes, *, fixed_pose=True):
         """Commit a rigid generated sign transform without rebuilding route topology."""
         if any(not oid.startswith('AUTO:') or
                set(pose)!={'dx','dy','rotation'} or
@@ -285,19 +302,27 @@ class AirportScene:
         if not self._transaction_depth:
             old = copy.deepcopy(self.data)
         for oid,pose in changes.items():
-            current.setdefault(oid,{}).update(pose,sign_fixed_pose=True)
+            override=current.setdefault(oid,{})
+            override.update(pose)
+            if fixed_pose:
+                override['sign_fixed_pose']=True
         if not self._transaction_depth:
             self.revision += 1
             self.past.append(('移动或旋转自动标识',old))
             self.past = self.past[-80:]
             self.future.clear()
+            if self.on_commit:self.on_commit(self)
 
     def undo(self):
         if not self.past:return False
-        label,data=self.past.pop();self.future.append((label,copy.deepcopy(self.data)));self.data=data;self.revision+=1;return True
+        label,data=self.past.pop();self.future.append((label,copy.deepcopy(self.data)));self.data=data;self.revision+=1
+        if self.on_commit:self.on_commit(self)
+        return True
     def redo(self):
         if not self.future:return False
-        label,data=self.future.pop();self.past.append((label,copy.deepcopy(self.data)));self.data=data;self.revision+=1;return True
+        label,data=self.future.pop();self.past.append((label,copy.deepcopy(self.data)));self.data=data;self.revision+=1
+        if self.on_commit:self.on_commit(self)
+        return True
 
     def create_asset(self,kind,name,points,**props):
         aid='A-'+uuid.uuid4().hex[:10]
@@ -615,14 +640,14 @@ class AirportScene:
         temp=target.with_name(target.name+'.tmp')
         text=json.dumps(self.data,ensure_ascii=False,indent=2,allow_nan=False)
         payload=text.encode('utf-8')
-        if self.data.get('bitmap_layers') and len(payload)>20_000_000:
-            raise ValueError('带位图的工程超过 20 MB，请减少底图或缩小图片。')
+        if len(payload)>MAX_PROJECT_BYTES:
+            raise ValueError('工程文件超过 110 MB，请减少底图或缩小图片。')
         temp.write_bytes(payload);temp.replace(target)
 
     @classmethod
     def load(cls,path):
         path=Path(path)
-        if path.stat().st_size>20_000_000:raise ValueError('Scene exceeds 20 MB input budget')
+        if path.stat().st_size>MAX_PROJECT_BYTES:raise ValueError('Scene exceeds 110 MB input budget')
         return cls(json.loads(path.read_text(encoding='utf-8-sig')))
 
     @classmethod

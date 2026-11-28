@@ -26,11 +26,16 @@ TYPES = {
     'MARKING': ('其他标线', '#262626', '#fcfcfc'),
     'ARP': ('机场基准点', '#ffffff', None),
     'WIND': ('风向标', '#262626', '#ffffff'),
+    'HELIPAD': ('\u76f4\u5347\u673a\u576a','#262626',None),
+    'ANEMOMETER': ('\u98ce\u901f\u8ba1','#262626',None),
     'RVR': ('RVR 测量点','#262626',None),
     'TOWER': ('控制塔','#262626',None),
+    'VOR_CHECK': ('VOR\u6821\u51c6\u5706','#262626',None),
+    'VOR_DIRECTION': ('VOR\u65b9\u5411\u6821\u51c6','#262626',None),
     'VOR': ('VOR','#262626',None),
     'NDB': ('NDB','#262626',None),
     'DME': ('DME','#262626',None),
+    'ILS': ('ILS','#262626',None),
     'AIM': ('瞄准点','#262626',None),
     'DISPLACED': ('内移入口','#262626','#ffffff'),
     'APPROACH_LIGHTS': ('进近灯光','#262626',None),
@@ -48,12 +53,13 @@ ANNOTATIONS = {
 }
 TYPES.update(ANNOTATIONS)
 BOUNDARIES = ('GROUND_BOUNDARY','TOWER_BOUNDARY')
+OPEN_SHAPES = ('open_line','open_curve')
 AREA_TOOLS = ('HS','TOWER_BLIND','CONSTRUCTION','ILS_SENSITIVE',*BOUNDARIES)
 DEFAULT_VISIBLE = set(list(TYPES)[:9]) | {'RUNWAY_STRIP','TURN_PAD'}
 TYPES.update(RUNWAY_STRIP=('升降带','#000000',None),
              TURN_PAD=('跑道掉头坪','#4d4d4d','#4d4d4d'))
-SYMBOLS = ('ARP','WIND','HS','TOWER','VOR','NDB','DME','RVR',*(k for k in ANNOTATIONS if k!='TOWER_BOUNDARY'))
-NAV_SYMBOLS = ('TOWER','VOR','NDB','DME')
+SYMBOLS = ('ARP','WIND','HS','TOWER','VOR','NDB','DME','ILS','HELIPAD','ANEMOMETER','RVR',*(k for k in ANNOTATIONS if k!='TOWER_BOUNDARY'))
+NAV_SYMBOLS = ('TOWER','VOR','NDB','DME','ILS','HELIPAD','ANEMOMETER')
 HOTSPOTS = {'rounded_polygon':'自动圆角多边形','polygon':'普通多边形','rectangle':'矩形','rounded_rectangle':'圆角矩形','circle':'圆形'}
 UNITS = {'m':1, 'ft':1/.3048, 'km':.001}
 FIELDS = (
@@ -122,10 +128,10 @@ def runway_end_center(scene):
     return [sum(axis)/len(axis) for axis in zip(*endpoints)]
 
 
-def snap_rvr(scene,point,tolerance):
+def snap_rvr(scene,point,tolerance,visible=None):
     hits=[]
     for oid,runway in scene.assets.items():
-        if runway['kind']!='RUNWAY':continue
+        if runway['kind']!='RUNWAY' or visible and not visible(oid):continue
         path=runway['points']
         length=g.length(path)
         if not length:continue
@@ -174,7 +180,7 @@ def symbol_point(scene, item):
     if item.get('auto_runway_center'):
         return runway_end_center(scene) or item['point']
     runway=scene.assets.get(item.get('runway'))
-    if runway and runway['kind']=='RUNWAY':
+    if item['kind']=='ARP' and runway and runway['kind']=='RUNWAY':
         return g.at(runway['points'],g.length(runway['points'])/2)[0]
     return item['point']
 
@@ -188,7 +194,7 @@ def feet_suffix(scene):
 
 
 def is_visible(config,kind):
-    fallback=config.get('visible',{}).get('SHOULDER',False) if kind.endswith('_SHOULDER') else kind in DEFAULT_VISIBLE or kind in SYMBOLS or kind in ANNOTATIONS or kind in ('PAPI','AIM','DISPLACED','ELEV')
+    fallback=config.get('visible',{}).get('SHOULDER',False) if kind.endswith('_SHOULDER') else kind in DEFAULT_VISIBLE or kind in SYMBOLS or kind in ANNOTATIONS or kind in ('PAPI','AIM','DISPLACED','ELEV','VOR_CHECK','VOR_DIRECTION')
     return config.get('visible',{}).get(kind,fallback)
 
 
@@ -196,11 +202,11 @@ ANNOTATION_DASHES = {'CONSTRUCTION':[6,4],'GROUND_BOUNDARY':[5,3,2,3],
                      'TOWER_BOUNDARY':[5,3,2,3],'ILS_SENSITIVE':[.12,3]}
 
 
-def snap_guard(scene,point):
+def snap_guard(scene,point,visible=None):
     from model20 import axes,TAXIS
     candidates=[]
     for aid,axis in axes(scene).items():
-        if axis['kind'] not in TAXIS or g.length(axis['points'])<.001:continue
+        if axis['kind'] not in TAXIS or g.length(axis['points'])<.001 or visible and not visible(aid):continue
         distance,station,center=g.project(axis['points'],point)
         width=axis['props']['width']
         if distance<=width/2:
@@ -228,7 +234,7 @@ def annotation_paths(item):
     if item['kind']=='RUNWAY_GUARD':
         return guard_paths(item['point'],item['transverse'],item['width'])
     vertices=item['vertices']
-    return [vertices if item['shape']=='open_line' else hotspot_path(item['shape'],vertices)]
+    return [hotspot_path(item['shape'],vertices)]
 
 
 def boundary_motifs(path,unit=1.):
@@ -270,7 +276,11 @@ def annotation_rows(oid,item,stroke,dark):
 
 
 def hotspot_path(mode,points):
-    if mode in ('polygon','rounded_polygon'):
+    if mode=='open_line':return points
+    if mode=='open_curve':
+        if len(points)<3:return points
+        vertices=points
+    elif mode in ('polygon','rounded_polygon'):
         if len(points)<3:return points
         vertices=points
     else:
@@ -283,8 +293,11 @@ def hotspot_path(mode,points):
         vertices=[a,(b[0],a[1]),b,(a[0],b[1])]
     if mode in ('polygon','rectangle'):
         return [*vertices,vertices[0]]
-    result=[]
-    for i,b in enumerate(vertices):
+    opened=mode=='open_curve'
+    result=[vertices[0]] if opened else []
+    interior=range(1,len(vertices)-1) if opened else range(len(vertices))
+    for i in interior:
+        b=vertices[i]
         a,c=vertices[i-1],vertices[(i+1)%len(vertices)]
         ratio=min(.20,min(math.dist(a,b),math.dist(c,b))/max(.001,math.dist(a,b))* .22)
         u=[b[k]+(a[k]-b[k])*ratio for k in (0,1)]
@@ -293,7 +306,16 @@ def hotspot_path(mode,points):
         for j in range(9):
             t=j/8
             result.append(tuple((1-t)**2*u[k]+2*t*(1-t)*b[k]+t*t*v[k] for k in (0,1)))
-    return [*result,result[0]]
+    return [*result,vertices[-1] if opened else result[0]]
+
+
+def helipad_center(asset):
+    props=asset['props']
+    if asset['kind']=='STAND' and props.get('helicopter_stand'):
+        return asset['points'][-1]
+    if asset['kind']=='MARKING' and props.get('mark_type')=='HELIPAD':
+        return asset['points'][0]
+    return None
 
 
 def present_types(scene):
@@ -309,6 +331,11 @@ def present_types(scene):
     if 'RUNWAY' in result:result.add('RUNWAY_STRIP')
     from papi21 import rows as papi_rows
     if any(papi_rows(scene)):result.add('PAPI')
+    if any(helipad_center(a) is not None for a in scene.assets.values()):
+        result.add('HELIPAD')
+    result.update('VOR_CHECK' if a['props']['mark_type']=='VOR' else 'VOR_DIRECTION'
+                  for a in scene.assets.values() if a['kind']=='MARKING'
+                  and a['props'].get('mark_type') in ('VOR','VOR_DIRECTION'))
     result.update(item['kind'] for item in settings(scene).get('symbols',{}).values())
     return result
 
@@ -413,7 +440,7 @@ def closure_marks(points, span):
             yield [(x-dx,y-dy),(x+dx,y+dy)]
 
 
-def chart_items(scene, regular=None):
+def chart_items(scene, regular=None, *, generated=None, stand_designs=None):
     from model20 import axes
     from segments18 import pieces
     from project10 import stopway_axes
@@ -421,17 +448,22 @@ def chart_items(scene, regular=None):
     from stand_profiles import lead_design, safety_profile
 
     from marking_standards import closure_routes
-    if regular is None:
-        from scene_render import display_list
-        regular=display_list(scene)
+    from scene_render import display_list
+    from automatic_markings import generated_markings
     config=settings(scene)
     combined=config.get('annotations',{}).get('runway_end_badge',False)
     closed_assets,closed=closure_routes(scene)
     use_cross=closure_style(config)=='cross'
+    if regular is None or closed or not regular:
+        if stand_designs is None:stand_designs={}
+        if generated is None:
+            generated=generated_markings(scene,stand_designs=stand_designs)
+    if regular is None:
+        regular=(display_list(scene,generated=generated,stand_designs=stand_designs)
+                 if not closed or config.get('visible',{}).get('MARKING') else ())
     guides=regular
     if closed or not regular:
-        from scene_render import display_list
-        guides=display_list(scene,chart_guides=True)
+        guides=display_list(scene,generated=generated,chart_guides=True,stand_designs=stand_designs)
     from pavement_geometry import crossings
     junction_owners={j['id']:j['assets'] for j in crossings(scene)} if closed and use_cross else {}
     axes_map=axes(scene)
@@ -440,7 +472,8 @@ def chart_items(scene, regular=None):
     rows=[]
     kinds=set()
     def show(kind,oid):
-        return kind in TYPES and is_visible(config,kind) and not hidden.get(oid,{}).get('hidden')
+        style=hidden.get(oid,{})
+        return kind in TYPES and is_visible(config,kind) and not style.get('hidden') and style.get('opacity')!=0
     def add(kind,item):
         kinds.add(kind)
         rows.append(item)
@@ -504,7 +537,9 @@ def chart_items(scene, regular=None):
             if fill!=TYPES[kind][2] or 'fill' in config.get('objects',{}).get(aid,{}):
                 envelope=safety_profile(scene,asset)
                 if len(envelope)>=3:add(kind,polygon(aid,envelope,None,fill))
-            for guide in lead_design(asset,scene)['paths']:
+            design=(stand_designs or {}).get(aid) if not props.get('helicopter_stand') else None
+            if design is None:design=lead_design(asset,scene)
+            for guide in design['paths']:
                 add(kind,line(aid,guide['points'],stroke,dash=[2,1.5]))
             if props.get('remote_stand'):
                 from stand15 import remote_exit_lines
@@ -735,12 +770,7 @@ def chart_items(scene, regular=None):
         origin=symbol_point(scene,item)
         caption=item.get('label',kind)
         size=max(clearance,extent*.018)
-        if kind=='TOWER' or item.get('manual_position'):
-            point=origin
-        else:
-            point=clear_position((origin[0],origin[1]+clearance),[((0,-1),0,0)],
-                                 max(size,len(caption)*extent/220),size*1.5)
-            if point is None:point=origin
+        point=origin
         ink=colors(config,kind,oid)[0]
         add(kind,dict(label(oid,point,'',19,ink),chart_symbol=kind,
                       symbol_variant=item.get('variant'),symbol_fill=None,chart_symbol_max=size))
@@ -748,6 +778,33 @@ def chart_items(scene, regular=None):
         row=label(oid,point,caption,10,ink,dy=18 if kind=='TOWER' else -16)
         add(kind,row)
         reserve(row)
+
+    for oid,asset in scene.assets.items():
+        props=asset['props']
+        point=helipad_center(asset)
+        if point is not None and show('HELIPAD',oid):
+            ink=colors(config,'HELIPAD',oid)[0]
+            add('HELIPAD',dict(label(oid,point,'',19,ink),chart_symbol='HELIPAD',
+                               symbol_fill=None))
+            caption=props.get('stand_number') or props.get('number')
+            if not caption and asset['kind']=='STAND':caption=asset['name']
+            if not caption:continue
+            row=label(oid,point,caption,10,ink,dy=16)
+            add('HELIPAD',row)
+            reserve(row)
+
+    for oid,asset in scene.assets.items():
+        mark_type=asset['props'].get('mark_type')
+        if asset['kind']!='MARKING' or mark_type not in ('VOR','VOR_DIRECTION'):
+            continue
+        kind='VOR_CHECK' if mark_type=='VOR' else mark_type
+        if show(kind,oid):
+            points=asset['points']
+            direction=g.unit(points[0],points[-1])
+            angle=math.atan2(direction[1],direction[0])
+            ink=colors(config,kind,oid)[0]
+            add(kind,dict(label(oid,points[0],'',19,ink),chart_symbol=kind,
+                          symbol_variant=angle,symbol_fill=None))
 
     approach_lights=[]
     if is_visible(config,'APPROACH_LIGHTS'):
@@ -760,8 +817,9 @@ def chart_items(scene, regular=None):
             axis=g.unit(*runway['points'])
             normal=(-axis[1],axis[0])
             ink=colors(config,'APPROACH_LIGHTS',oid)[0]
-            for point,_,_,_ in fixtures(record):
-                path=[[p+side*1.4*n for p,n in zip(point,normal)] for side in (-1,1)]
+            for point,_,direction,_ in fixtures(record,axis_direction=True):
+                transverse=(-direction[1],direction[0]) if direction and options.get('axis_nodes') else normal
+                path=[[p+side*1.4*n for p,n in zip(point,transverse)] for side in (-1,1)]
                 approach_lights.append(line(oid,path,ink,width=.8))
     from shapely.geometry import LineString
     approach_footprints=unary_union([LineString(item['points']).buffer(item['width']/2)
@@ -933,6 +991,25 @@ def symbol_scale(item,zoom,pixel_factor=1.):
 
 def symbol_parts(kind,variant=None):
     ring=[(9*math.cos(i*math.tau/32),9*math.sin(i*math.tau/32)) for i in range(32)]
+    if kind=='VOR_CHECK':
+        return [('line',ring+ring[:1])]
+    if kind=='VOR_DIRECTION':
+        c,s=math.cos(variant or 0),-math.sin(variant or 0)
+        arrow=[(-9,0),(11,0),(7,-3),(11,0),(7,3)]
+        return [('line',ring+ring[:1]),('line',[(c*x-s*y,s*x+c*y) for x,y in arrow])]
+    if kind=='HELIPAD':
+        frame=[(9*math.cos(a),9*math.sin(a))
+               for a in (-math.pi/2,math.pi/6,5*math.pi/6)]
+        return [('line',frame+frame[:1]),('line',[(-2,-1),(-2,3)]),
+                ('line',[(2,-1),(2,3)]),('line',[(-2,1),(2,1)])]
+    if kind=='ANEMOMETER':
+        cups=[]
+        for angle in (0,math.tau/3,2*math.tau/3):
+            x,y=6*math.cos(angle),6*math.sin(angle)
+            cup=[(x+2.4*math.cos(angle+a*math.pi/8),y+2.4*math.sin(angle+a*math.pi/8))
+                 for a in range(9)]
+            cups.extend([('line',[(0,0),(x,y)]),('line',cup)])
+        return cups
     if kind=='RVR':
         arc=[(17*math.sin(a),8-17*math.cos(a))
              for a in (math.radians(i) for i in range(-30,31,5))]
@@ -946,6 +1023,9 @@ def symbol_parts(kind,variant=None):
                     ('line',[(-3,-2),(-5,9),(5,9),(3,-2)])]
         return [('polygon',[(r*math.sin(i*math.pi/5),-r*math.cos(i*math.pi/5))
                             for i,r in enumerate((9,4)*5)])]
+    if kind=='ILS':
+        return [('line',[(0,-9),(-7,8),(7,8),(0,-9)]),('line',[(0,-9),(0,8)]),
+                ('line',[(-4,2),(4,2)]),('line',[(-6,6),(6,6)])]
     if kind in ('VOR','DME','NDB'):
         def dot(x,y):
             return 'polygon',[(x+math.cos(i*math.tau/8),y+math.sin(i*math.tau/8)) for i in range(8)]
@@ -1000,6 +1080,40 @@ def pixel_items(items,scale,pixel_factor=1):
                          (x+half_width,y+half_height),(x-half_width,y+half_height)]
                 yield dict(polygon(row['oid'],corners,row['chart_box'],None),width=pixel_factor/scale)
         yield row
+
+
+def layout_items(items,angle):
+    """Rotate geometry into the page coordinate system, leaving captions readable."""
+    if not angle:return items
+    from shapely.affinity import rotate
+    extent=chart_extent(items)
+    cx,cy=(extent[0]+extent[2])/2,(extent[1]+extent[3])/2
+    radians=math.radians(angle)
+    c,s=math.cos(radians),math.sin(radians)
+    def vector(point):
+        x,y=point
+        return c*x-s*y,s*x+c*y
+    def point(value):
+        x,y=vector((value[0]-cx,value[1]-cy))
+        return x+cx,y+cy
+    result=[]
+    for item in items:
+        row=dict(item,points=[point(q) for q in item['points']])
+        if row.get('chart_symbol')=='VOR_DIRECTION':
+            row['symbol_variant']+=radians
+        for key in ('normal','rvr_direction'):
+            if row.get(key) is not None:row[key]=vector(row[key])
+        if 'runway_axis' in row:row['runway_axis']=[point(q) for q in row['runway_axis']]
+        if 'axis_angle' in row:
+            row['axis_angle']+=radians
+            row['rotation']=(row.get('rotation',0)+angle+90)%180-90
+        for key in ('chart_pavement','chart_hotspot_boundary'):
+            if row.get(key) is not None:row[key]=rotate(row[key],angle,origin=(cx,cy))
+        if 'chart_terminal_labels' in row:
+            row['chart_terminal_labels']=[dict(other,points=[point(q) for q in other['points']])
+                                          for other in row['chart_terminal_labels']]
+        result.append(row)
+    return result
 
 
 def saved_region(scene,items):
@@ -1354,7 +1468,7 @@ def page_items(scene, items, kinds, region, page, info=None):
         group='north'
         x=x1-(x1-x0)*.12
         y=y1-(y1-y0)*.17
-        true=-float(scene.data['meta'].get('grid_north_true_heading',0))
+        true=-float(scene.data['meta'].get('grid_north_true_heading',0))-info.get('airport_rotation',0.)
         decl=float(scene.data['meta'].get('magnetic_declination') or 0)
         for heading,tag,ray in ((true,'N',.064),(true+decl,'MN',.048)):
             if tag=='MN' and not info.get('magnetic_north',True):continue

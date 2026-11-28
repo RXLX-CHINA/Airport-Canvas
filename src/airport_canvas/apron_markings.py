@@ -45,8 +45,9 @@ def render_apron(asset,spec):
         for segment in hatch_segments(pts,p.get('spacing',2)+lw,45):
             for clipped,_ in outside_segments(segment,[home] if p.get('show_home',False) else [],lw/2):line(clipped,RED)
         if p.get('show_home',False):
-            if p.get('home_white19',False):out.append(dict(type='polygon',oid=oid,points=home,fill=WHITE,stroke=None))
+            if p.get('home_white19',False):out.append(dict(type='polygon',oid=oid,points=home,fill=WHITE,stroke=None,bridge_home=True))
             circle(center,diameter)
+            out[-1]['bridge_home']=True
     else:
         if shape=='apron_transfer':
             for segment in hatch_segments(pts,p.get('row_spacing',2),angle):

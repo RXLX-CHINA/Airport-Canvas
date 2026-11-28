@@ -50,11 +50,24 @@ def extrusion(a,index,station,target,perpendicular=False):
     # The pointer supplies a distance. The selected edge supplies the side.
     return abs(depth), (0. if perpendicular else sum(x*y for x,y in zip(delta,tangent)))
 
+def building_overlap(scene, shape):
+    from shapely import STRtree
+
+    cache=getattr(scene,'_terminal_collision_cache',None)
+    if scene._transaction_depth or cache is None or cache[0]!=scene.revision or cache[1] is not scene.data:
+        polygons=[polygon(a['points']) for a in buildings(scene)]
+        cache=(scene.revision,scene.data,STRtree(polygons))
+        if not scene._transaction_depth:
+            scene._terminal_collision_cache=cache
+    tree=cache[2]
+    return any(shape.intersection(tree.geometries[i]).area>.001 for i in tree.query(shape))
+
+
 def pier_footprint(scene,a,index,station,width,length,shear=0.):
     if a['props'].get('building_role19')!='TERMINAL':raise ValueError('请先选择航站楼主体')
     if length<=0:raise ValueError('指廊长度必须大于0')
     pts=quad(a,index,station,width,length,shear);shape=Polygon(pts)
-    if any(shape.intersection(polygon(b['points'])).area>.001 for b in buildings(scene)):raise ValueError('指廊与已有建筑或廊桥重叠')
+    if building_overlap(scene,shape):raise ValueError('指廊与已有建筑或廊桥重叠')
     return pts
 
 def extrude_pier(scene,aid,index,station,width=28.,length=160.,shear=0.):
@@ -68,7 +81,7 @@ def extrude_bridge(scene,aid,index,station,width,length,shear=0.):
     if pier['props'].get('building_role19')!='PIER':raise ValueError('请先选择指廊。')
     points=quad(pier,index,station,width,length,shear)
     shape=Polygon(points)
-    if any(shape.intersection(polygon(a['points'])).area>.001 for a in buildings(scene)):
+    if building_overlap(scene,shape):
         raise ValueError('廊桥与现有建筑重叠。')
     root=root_id(pier)
     used={a['props'].get('bridge_number19') for a in buildings(scene) if a['props'].get('terminal_root19')==root}
@@ -80,9 +93,10 @@ def extrude_bridge(scene,aid,index,station,width,length,shear=0.):
 
 def eligible_edges(scene,a):
     root=scene.assets[root_id(a)];out=[]
+    root_buffer=polygon(root['points']).buffer(.01)
     for i in range(len(a['points'])):
         p,z,u,n=frame(a,i);L=g.distance(p,z)
-        if LineString([p,z]).intersection(polygon(root['points']).buffer(.01)).length>.1:continue
+        if LineString([p,z]).intersection(root_buffer).length>.1:continue
         if L>5:out.append((i,L))
     return out
 def bridge_tip(a):return [(a['points'][2][k]+a['points'][3][k])/2 for k in (0,1)]
@@ -215,16 +229,18 @@ def other_building_label(asset):
     return []
 
 
-def items(scene):
+def items(scene, *, building_ids=None):
     result=[]
-    for a in buildings(scene):
+    structures=buildings(scene) if building_ids is None else [scene.assets[oid] for oid in building_ids]
+    for a in structures:
         p=a['props'];role=p['building_role19'];fill={'TERMINAL':'#bfd1de','PIER':'#d1dce5','BRIDGE':'#a4bccb','OTHER':'#c9c2b9'}[role];result.append(dict(type='polygon',oid=a['id'],points=a['points'],fill=p.get('building_color19',fill),stroke='#ffffff' if role=='BRIDGE' and p.get('white_outline',False) else None,width=.35,building19=True));q=polygon(a['points']).centroid;label=p.get('terminal_number19','') if role in ('TERMINAL','OTHER') else p.get('bridge_number19','') if role=='BRIDGE' else ''
         if role=='OTHER':
             for line,point,size in other_building_label(a) or ():
                 result.append(dict(type='text',oid=a['id'],points=[point],text=line,fill='#15354b',
                                    size=size,rotation=0,world_text=True,building19=True))
         elif label:result.append(dict(type='text',oid=a['id'],points=[[q.x,q.y]],text=label,fill='#15354b',size=p.get('building_text_height20_3',4 if role=='BRIDGE' else 10),rotation=0,world_text=True,building19=True))
-    labels=[i for i in result if i['type']=='text'];result=[i for i in result if i['type']!='text']+__import__('terminal_style20_3').outlines(buildings(scene))+labels
+    if building_ids is not None:return result
+    labels=[i for i in result if i['type']=='text'];result=[i for i in result if i['type']!='text']+__import__('terminal_style20_3').outlines(structures)+labels
     # Roof indication remains open so the stand guidance stays readable.
     for a in scene.assets.values():
         if a['kind']=='STAND' and a['props'].get('hangar19'):

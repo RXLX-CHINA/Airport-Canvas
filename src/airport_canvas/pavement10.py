@@ -90,10 +90,10 @@ def clip_end_shoulder(scene,aid,polygon):
 
 
 
-def snap_stopway(scene,point,zoom):
+def snap_stopway(scene,point,zoom,visible=None):
     hits=[]
     for runway in scene.assets.values():
-        if runway['kind']!='RUNWAY':continue
+        if runway['kind']!='RUNWAY' or visible and not visible(runway['id']):continue
         width=runway['props']['width']
         limit=max(width*.7,min(30,16/max(.01,zoom)))
         for end,q in (('a',runway['points'][0]),('b',runway['points'][-1])):

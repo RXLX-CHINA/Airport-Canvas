@@ -9,7 +9,6 @@ FIELDS=(
     ('join_radius','滑行道端正向半径',25.),
     ('rapid_exact_straight','正向直线段（0 为自动）',0.),
     ('rapid_taxi_stub','滑行道侧短联络直线段（0 为直接并入）',0.),
-    ('reverse_exit_radius','跑道端反向半径',550.),
     ('reverse_join_radius','滑行道端反向半径',25.),
     ('reverse_surface_radius','滑行道端反向道面轴线半径（0 跟随中线）',0.),
     ('reverse_rapid_exact_straight','反向直线段（0 为自动）',0.),
@@ -49,18 +48,69 @@ def source(scene,oid):
     if movement and not movement.get('legacy_attachment') and movement.get('geometry')=='RAPID':
         return movement,None,None
     asset=scene.assets.get(oid)
-    if not asset or not asset['props'].get('rapid_exit') or asset['props'].get('rapid_drawn_axis56'):return None
+    if not asset or not asset['props'].get('rapid_exit'):return None
     links=[m for m in scene.movements.values() if m.get('legacy_attachment') and m['to']['asset']==oid]
     runway=next((m for m in links if scene.assets[m['from']['asset']]['kind']=='RUNWAY'),None)
     taxi=next((m for m in links if scene.assets[m['from']['asset']]['kind'] in
                ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE')),None)
+    if (not runway or not taxi) and asset['props'].get('rapid_drawn_axis56'):
+        points=asset['points']
+        length=g.length(points)
+        def endpoint_link(kinds,exclude):
+            candidates=[]
+            for end,point in enumerate((points[0],points[-1])):
+                if end==exclude:continue
+                tangent=g.unit(*(points[:2] if end==0 else points[-2:]))
+                for target in scene.assets.values():
+                    if target['id']==oid or target['kind'] not in kinds:continue
+                    distance,station,_=g.project(target['points'],point)
+                    if distance>.05:continue
+                    _,axis=g.at(target['points'],station)
+                    direction=1 if sum(x*y for x,y in zip(axis,tangent))>=0 else -1
+                    if (end==1)==('RUNWAY' in kinds):direction=-direction
+                    port=dict(asset=target['id'],station=station,direction=direction)
+                    own=dict(asset=oid,station=length if end else 0.,direction=1)
+                    candidates.append((distance,target['id'],end,{'from':port,'to':own}))
+            return min(candidates,key=lambda row:row[:3])[-1] if candidates else None
+        runway=runway or endpoint_link(('RUNWAY',),None)
+        if runway:
+            taxi=taxi or endpoint_link(('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE'),
+                                       int(runway['to']['station']>length/2))
     if not runway or not taxi:return None
     model=dict(runway)
     p=asset['props']
     if p.get('rapid_radius'):model['exit_radius']=p['rapid_radius']
     if p.get('rapid_angle'):model['exit_angle']=p['rapid_angle']
     model.update(p.get('rapid_geometry39',{}))
-    model.update(width=asset['props']['width'],**{'from':runway['from'],'to':taxi['from']})
+    for key in ('reverse_join_radius','reverse_surface_radius'):
+        if p.get(key):model[key]=p[key]
+    model.update(width=asset['props']['width'],**{'from':dict(runway['from']),'to':dict(taxi['from'])})
+    if p.get('rapid_drawn_axis56'):
+        from curve_model import editable_vertices
+        points=editable_vertices(asset)
+        if runway['to']['station']>g.length(asset['points'])/2:points=list(reversed(points))
+        runway_axis=g.unit(*scene.assets[model['from']['asset']]['points'])
+        normal=(-runway_axis[1],runway_axis[0])
+        segments=[]
+        for a,b in zip(points,points[1:]):
+            delta=[y-x for x,y in zip(a,b)]
+            along=sum(d*u for d,u in zip(delta,runway_axis))
+            across=sum(d*u for d,u in zip(delta,normal))
+            if abs(along)>1e-6 and abs(across)>1e-6:
+                segments.append((math.hypot(along,across),along,across,a))
+        if not segments:return None
+        _,along,across,straight_start=max(segments,key=lambda segment:segment[0])
+        from_normal=math.degrees(math.atan2(abs(along),abs(across)))
+        model['from']['direction']=1 if along>0 else -1
+        taxi_axis=scene.assets[model['to']['asset']]['points']
+        _,target_direction=g.at(taxi_axis,model['to']['station'])
+        alignment=sum(a*b for a,b in zip(g.unit(points[-2],points[-1]),target_direction))
+        if abs(alignment)>1e-6:model['to']['direction']=1 if alignment>0 else -1
+        axis=list(asset['points'])
+        if runway['to']['station']>g.length(axis)/2:axis.reverse()
+        _,station,_=g.project(axis,straight_start)
+        model.update(exit_angle=90.-from_normal,rapid_lock_angle39=True,rapid_auto_fit=False,
+                     drawn_axis39=axis,drawn_straight_start39=station)
     return model,runway,taxi
 
 def plans(scene,model,values):
@@ -89,6 +139,7 @@ def apply(scene,oid,values):
     with scene.transaction('更新快速脱离道几何'):
         if runway is None:
             model.update(values,rapid_auto_radius=False)
+            model['from']['station']=forward['runway_station']
             model['to'].update(station=forward['station'],direction=forward['direction'])
             model.pop('branch_controls',None)
             model.pop('branch_anchors',None)
@@ -101,10 +152,24 @@ def apply(scene,oid,values):
             for link in scene.movements.values():
                 for port in (link['from'],link['to']):
                     if port['asset']==oid:port['station']*=new/old
+            runway['from'].update(station=forward['runway_station'],direction=model['from']['direction'])
             taxi['from'].update(station=forward['station'],direction=forward['direction'])
             asset['points']=points
+            for link,role in ((runway,'RAPID_EXIT'),(taxi,'TAXIWAY_JOIN')):
+                if 'id' not in link:
+                    end=new if link['to']['station']>old/2 else 0.
+                    scene.connect(link['from'],dict(link['to'],station=end),role,
+                                  width=asset['props']['width'],legacy_attachment=True)
             for key in ('curve_nodes','design_vertices'):asset.pop(key,None)
-            asset['props'].update(rapid_geometry39=dict(values),rapid_radius=forward['r'],
+            for key in ('rapid_drawn_axis56','reverse_join_radius','reverse_surface_radius'):
+                asset['props'].pop(key,None)
+            geometry=dict(values)
+            if model.get('drawn_axis39'):
+                geometry.update(drawn_axis39=model['drawn_axis39'],
+                                drawn_straight_start39=model['drawn_straight_start39'])
+            if model.get('rapid_lock_angle39'):
+                geometry.update(rapid_lock_angle39=True,rapid_auto_fit=False)
+            asset['props'].update(rapid_geometry39=geometry,rapid_radius=forward['r'],
                                   rapid_angle=forward['exit_angle'])
 
 def open_dialog(editor):
@@ -130,9 +195,14 @@ def open_dialog(editor):
         field.setValue(model.get(key,model.get(fallback,defaults.get(fallback,default))))
         fields[key]=field
         layout.addRow(tr(label),field)
+    if model.get('drawn_axis39'):fields['exit_radius'].setEnabled(False)
     message=QtWidgets.QLabel()
     message.setWordWrap(True)
     layout.addRow(message)
+    if editor.scene.assets.get(oid,{}).get('props',{}).get('rapid_drawn_axis56'):
+        notice=QtWidgets.QLabel(tr('手绘倾斜角已锁定（相对跑道法线）：{angle:.2f}°。应用后只按所选半径和直线段重新拟合。').format(angle=90.-model['exit_angle']))
+        notice.setWordWrap(True)
+        layout.addRow(notice)
     buttons=QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Apply|
                                       QtWidgets.QDialogButtonBox.StandardButton.Cancel)
     layout.addRow(buttons)
@@ -149,8 +219,8 @@ def open_dialog(editor):
         canvas=editor.canvas
         canvas.delete('rapid_preview39')
         shared=fields['rapid_taxi_stub'].value()>0
-        fields['reverse_exit_radius'].setEnabled(not shared)
-        fields['reverse_rapid_exact_straight'].setEnabled(not shared)
+
+        fields['reverse_rapid_exact_straight'].setEnabled(not shared or bool(model.get('drawn_axis39')))
         try:
             forward,reverse=plans(editor.scene,model,values())
             if reverse is None and values().get('reverse_rapid_exact_straight') and not shared:

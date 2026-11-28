@@ -4,10 +4,10 @@ import scene_geometry as g
 from stand14 import local,world,baseline
 from stand11 import frame,uses_drawn_lead
 
-def remote_exit_hit(scene,point,tolerance):
+def remote_exit_hit(scene,point,tolerance,visible=None):
     from model20 import axes,TAXIS
     from guidance20 import snap_axis
-    return snap_axis(scene,point,{oid:axis for oid,axis in axes(scene).items() if axis['kind'] in TAXIS},tolerance)
+    return snap_axis(scene,point,{oid:axis for oid,axis in axes(scene).items() if axis['kind'] in TAXIS and (visible is None or visible(oid))},tolerance)
 
 def draw_exit_snap(editor,hit,tag):
     from interface_language import tr
@@ -66,7 +66,11 @@ def remote_exit_lines(a,scene):
     fork=[stop[k]+heading[k]*x+normal[k]*y for k in (0,1)]
     branch_heading=g.unit(stop,fork) if g.distance(stop,fork)>.01 else heading
     arms=[]
-    for sign in (-1,1):
+    _,axis_direction=g.at(path,station)
+    left_sign=1 if sum(u*v for u,v in zip(axis_direction,normal))>=0 else -1
+    direction=p.get('exit_direction','BOTH')
+    signs=(left_sign,) if direction=='LEFT' else (-left_sign,) if direction=='RIGHT' else (-1,1)
+    for sign in signs:
         end_station=min(length,max(0.,station+sign*reach))
         if abs(end_station-station)<.5:continue
         end,tangent=g.at(path,end_station)
@@ -165,22 +169,30 @@ def design(a,scene=None):
     from marking_catalog import primitives
     base,branches=geometry(a,scene);p=a['props'];kind=p.get('lead_type','A');kind='C' if kind=='ICAO' else kind;numbers=[];full=[];h=p.get('number_height',4);margin=p.get('number_clearance15',1.)
     if not branches:return base
-    label_frame=approach_frame(a) if kind!='C' else a
-    canonical=next((b for b in branches if b['key']=='1'),branches[0]);L=g.length(canonical['points']);station=p.get('label_station14',{}).get('paired',canonical['default_station']/max(L,.01))*L
-    station=min(L,max(h+margin,min(max(h+margin,L-h-margin),station)));q,u=g.at(canonical['points'],station)
-    if canonical['key']=='-1':
-        q=reflected(label_frame,q);_,axis,normal=frame(label_frame);u=[axis[k]*sum(u[j]*axis[j] for j in (0,1))-normal[k]*sum(u[j]*normal[j] for j in (0,1)) for k in (0,1)]
+    fraction=p.get('label_station14',{}).get('paired')
+    canonical=next((b for b in branches if b['key']=='1'),branches[0])
+    first_fraction=None
     for b in branches:
-        side=int(b['key'])
-        if (uses_drawn_lead(a) or p.get('lead_type')=='ICAO') and kind=='C':
-            offset=h+margin+1
-            n=dict(point=[q[0]-u[1]*offset,q[1]+u[0]*offset],direction=list(u),text_rotation_offset=0)
-        elif kind=='C':
-            old=local(a,b['number']['point']);old[0]=local(a,q)[0];n=dict(point=world(a,[old[0],abs(old[1])*side]),direction=frame(label_frame)[1],text_rotation_offset=0)
+        path=b['points']
+        path_index=g.PathIndex(path)
+        length=path_index.length
+        station=b['default_station'] if fraction is None else fraction*length
+        limit=min(h+margin,length/2)
+        station=max(limit,min(length-limit,station))
+        if numbers:
+            clearance=max(2*h+2*margin,.65*h*len(str(p.get('stand_number') or a.get('name','101')))+2*margin)
+            stagger=min(h,length*.2)
+            if (abs(station-first_fraction*length)<stagger
+                    or g.distance(numbers[0]['point'],path_index.at(station)[0])<clearance):
+                candidates=[station]+[limit+(length-2*limit)*i/32 for i in range(33)]
+                station=min(candidates,key=lambda s:(
+                    max(0,clearance-g.distance(numbers[0]['point'],path_index.at(s)[0])),
+                    max(0,stagger-abs(s-first_fraction*length)),abs(s-station)))
         else:
-            point=q if side==1 else reflected(label_frame,q);direction=list(u) if side==1 else [frame(label_frame)[1][k]*sum(u[j]*frame(label_frame)[1][j] for j in (0,1))-frame(label_frame)[2][k]*sum(u[j]*frame(label_frame)[2][j] for j in (0,1)) for k in (0,1)]
-            n=dict(point=point,direction=direction,text_rotation_offset=0)
-        numbers.append(n);full.append(dict(key='BRANCH:'+b['key'],points=b['points']))
+            first_fraction=station/max(.01,length)
+        q,u=g.at(path,station)
+        numbers.append(dict(point=q,direction=list(u),text_rotation_offset=0))
+        full.append(dict(key='BRANCH:'+b['key'],points=path))
     align=next((copy.deepcopy(x) for x in base['paths'] if x['key']=='ALIGN'),None)
     if align and kind!='C':
         align['points'][0]=branches[0]['points'][-1]
@@ -189,6 +201,12 @@ def design(a,scene=None):
     if p.get('ga_stand') or not p.get('show_number',True):
         base.update(paths=full,numbers=[],full_paths15=full)
         return base
+    if p.get('single_lead_number'):
+        path=align['points'] if align and align in full else canonical['points']
+        length=g.length(path)
+        fraction=p.get('label_station14',{}).get('center',.5)
+        q,u=g.at(path,max(0.,min(1.,fraction))*length)
+        numbers=[dict(point=q,direction=list(u),text_rotation_offset=0)]
     masks=[]
     for index,n in enumerate(numbers):
         if scene is not None:
@@ -220,8 +238,15 @@ def slide_number(scene,aid,index,q):
     a=scene.assets[aid];_,branches=geometry(a,scene)
     if not branches:return
     b=branches[min(index,len(branches)-1)];canonical=next((x for x in branches if x['key']=='1'),branches[0])
-    if b['key']!=canonical['key']:q=reflected(a,q)
-    path=canonical['points'];station=g.project(path,q)[1];a['props']['label_station14']={'paired':station/max(.01,g.length(path))}
+    path=b['points']
+    key='paired'
+    if a['props'].get('single_lead_number'):
+        base,_=geometry(a,scene)
+        align=next((part['points'] for part in base['paths'] if part['key']=='ALIGN'),None)
+        path=align if align and g.length(align)>.01 and a['props'].get('lead_type') not in ('C','ICAO') else canonical['points']
+        key='center'
+    station=g.project(path,q)[1]
+    a['props'].setdefault('label_station14',{})[key]=station/max(.01,g.length(path))
     for oid in list(scene.data['generated_overrides']):
         if oid.startswith('AUTO:'+aid+':STAND_NUMBER'):scene.data['generated_overrides'].pop(oid)
 
@@ -262,3 +287,59 @@ def snap_delta(scene,roots,delta,tolerance):
     _,aid,parent,station,q=min(rows,key=lambda row:(row[0],row[1],row[2]))
     return [q[k]-scene.assets[aid]['points'][0][k] for k in (0,1)],(aid,parent,station,q)
 from stand14 import combine
+
+
+class LeadCrossings:
+    """Find interior crossings using the same axes available for stand snapping."""
+    def __init__(self,scene):
+        from model20 import axes,TAXIS
+        from shapely.geometry import LineString
+        from shapely import STRtree
+        self.axes=[a for a in axes(scene).values()
+                   if a['kind'] in TAXIS and not a['props'].get('closed')
+                   and a['props'].get('center_visible',True)]
+        self.lines=[LineString(a['points']) for a in self.axes]
+        self.tree=STRtree(self.lines)
+
+    def curves(self,stand,paths):
+        from shapely.geometry import LineString
+        default_radius=max(0.,stand['props'].get('lead_radius',20.))
+        settings=stand['props'].get('lead_crossing_settings',{})
+        for part in paths:
+            lead=part['points']
+            stem=LineString(lead)
+            for index in sorted(self.tree.query(stem,predicate='intersects')):
+                axis=self.axes[index]
+                taxi=axis['points']
+                intersection=stem.intersection(self.lines[index])
+                points=intersection.geoms if intersection.geom_type=='MultiPoint' else (intersection,)
+                crossings=sorted((stem.project(point),point) for point in points
+                                 if point.geom_type=='Point' and not point.is_empty)
+                for number,(lead_station,point) in enumerate(crossings):
+                    if min(lead_station,stem.length-lead_station)<.1:
+                        continue
+                    taxi_station=self.lines[index].project(point)
+                    group=f"STAND_CROSS:{part['key']}:{axis['id']}:{number}"
+                    config=settings.get(group,{})
+                    radius=config.get('radius',default_radius)
+                    for side_a in (-1,1):
+                        for side_b in (-1,1):
+                            taxi_room=taxi_station if side_b<0 else self.lines[index].length-taxi_station
+                            lead_room=lead_station if side_a<0 else stem.length-lead_station
+                            _,u=g.at(taxi,taxi_station)
+                            _,v=g.at(lead,lead_station)
+                            dot=-side_a*side_b*sum(a*b for a,b in zip(u,v))
+                            angle=math.acos(max(-1.,min(1.,dot)))
+                            if not math.radians(10)<angle<math.radians(170):continue
+                            reach=min(radius*math.tan(angle/2),taxi_room*.9,lead_room*.9)
+                            if reach<.2:continue
+                            start,u=g.at(taxi,taxi_station+side_b*reach)
+                            end,v=g.at(lead,lead_station+side_a*reach)
+                            handle=reach*(4/3)*math.tan(angle/4)/math.tan(angle/2)
+                            path=g.cubic(start,end,[-side_b*x for x in u],
+                                         [side_a*x for x in v],handle,steps=24)
+                            if not LineString(path).is_simple:continue
+                            key=f'{group}:{side_a}:{side_b}'
+                            yield key,path,side_a>0,dict(
+                                group=group,point=[point.x,point.y],radius=radius,
+                                side=(side_a,side_b),visible=config.get('guides',{}).get(key,True))

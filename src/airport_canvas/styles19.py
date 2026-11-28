@@ -1,4 +1,6 @@
 """Live labels, airport-wide sign sizing and editable label anchors."""
+import math
+
 import scene_geometry as g
 from marking_catalog import CATALOG
 
@@ -71,15 +73,23 @@ def sync(scene):
             if a['name']==p.get('auto_name19',name):a['name']=name
             p['auto_name19']=name
 
-def move_label(scene,aid,point):
+def move_label(scene,aid,point,displayed=None):
     from automatic_markings import generated_markings,update_generated
-    mark=scene.assets.get(aid) or generated_markings(scene).get(aid)
+    mark=scene.assets.get(aid) or displayed or generated_markings(scene).get(aid)
     if not mark:raise ValueError('文字已不存在')
     delta=[point[k]-mark['points'][0][k] for k in (0,1)]
+    if not all(math.isfinite(value) for value in delta):
+        raise ValueError('Invalid label position')
     points=[[q[k]+delta[k] for k in (0,1)] for q in mark['points']]
     if aid not in scene.assets:
+        if mark['props']['mark_type']=='LOCATION':
+            override=scene.data['generated_overrides'].get(aid,{})
+            scene.move_generated_signs({aid:dict(
+                dx=override.get('dx',0)+delta[0],dy=override.get('dy',0)+delta[1],
+                rotation=override.get('rotation',0))},fixed_pose=False)
+            return
         update_generated(scene,aid,mark['name'],points,mark['props']);return
-    with scene.transaction('移动位置文字'):
+    with scene.transaction('移动位置文字',location_only=mark['props']['mark_type']=='LOCATION'):
         mark['points']=points;p=mark['props'];owner=scene.assets.get(p.get('label_asset'))
         if owner and p.get('axis_placement11'):
             from marks11 import side_pose

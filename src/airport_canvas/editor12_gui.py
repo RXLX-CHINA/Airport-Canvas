@@ -95,7 +95,7 @@ class Editor12(Editor11):
             self.apply_properties();p=self.world(e.x,e.y)
             if not self._deice_hit12:
                 from editor7_model import snap_path
-                hit=snap_path(self.scene,p,max(.25,15/self.zoom))
+                hit=snap_path(self.scene,p,max(.25,15/self.zoom),visible=self.can_edit_object)
                 if not hit or self.scene.assets[hit[1]]['kind'] not in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE'):self.status.set('请先点选滑行道中线');return
                 self._deice_hit12=hit;self.points=[hit[3]];self.redraw();return
             try:
@@ -105,7 +105,7 @@ class Editor12(Editor11):
         if self.mode.startswith('MARK:') and CATALOG[self.mode[5:]]['mode']=='PATH':
             # Cross-sectional holding marks retain their one-click axis tool.
             from editor7_model import CROSS_PATHS,snap_path
-            key=self.mode[5:];e=self.event10(e);p=self.world(e.x,e.y);hit=snap_path(self.scene,p,max(.25,12/self.zoom))
+            key=self.mode[5:];e=self.event10(e);p=self.world(e.x,e.y);hit=snap_path(self.scene,p,max(.25,12/self.zoom),visible=self.can_edit_object)
             if key in CROSS_PATHS and hit:return super().click(e)
             if hit:p=hit[3]
             if not self.points or g.distance(self.points[-1],p)>.05:self.points.append(p)
@@ -153,7 +153,7 @@ class Editor12(Editor11):
             if d['kind']=='VERTEX':
                 anchor=verts[i-1] if i else verts[1]
                 tangent=g.unit(verts[i-1],verts[i]) if i else g.unit(verts[0],verts[1])
-                p,hit=__import__('node_interaction20_8').resolve(self.scene,p,anchor,bool(getattr(e,'state',0)&1),max(.25,12/self.zoom),d['aid'],tangent)
+                p,hit=__import__('node_interaction20_8').resolve(self.scene,p,anchor,bool(getattr(e,'state',0)&1),max(.25,12/self.zoom),d['aid'],tangent,visible=self.can_edit_object)
                 verts[i]=p
             else:
                 incoming=g.unit(verts[i-1],verts[i]);outgoing=g.unit(verts[i],verts[i+1]);angle=math.acos(max(-1,min(1,sum(incoming[k]*outgoing[k] for k in (0,1)))))
@@ -189,11 +189,14 @@ class Editor12(Editor11):
             x0,x1=sorted((d['start'][0],e.x));y0,y1=sorted((d['start'][1],e.y));box=polygon([self.world(x0,y0),self.world(x1,y0),self.world(x1,y1),self.world(x0,y1)])
             found=set()
             for oid,a in self.scene.assets.items():
+                if not self.can_edit_object(oid):continue
                 pts=a['points'];path=LineString(pts+[pts[0]] if a['kind'] in ('APRON','PROTECTION','EQUIPMENT','CLOSED_AREA') else pts)
                 if path.intersects(box):found.add(__import__('transform11').owner(self.scene,oid,self.auto_assets))
             for oid,a in self.auto_assets.items():
+                if not self.can_edit_object(oid):continue
                 if len(a['points'])>1 and LineString(a['points']).intersects(box):found.add(__import__('transform11').owner(self.scene,oid,self.auto_assets))
-            self.selected_ids=(self.selected_ids|found) if d['add'] else found;self._preserve_set=True
+            found={oid for oid in found if self.can_edit_object(oid)}
+            self.selected_ids={oid for oid in self.selected_ids|found if self.can_edit_object(oid)} if d['add'] else found;self._preserve_set=True
             try:self.select(next(iter(self.selected_ids),None))
             finally:self._preserve_set=False
             self.redraw();self.status.set(f'已框选 {len(self.selected_ids)} 个对象');return

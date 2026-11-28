@@ -226,8 +226,9 @@ class Editor15(Editor14):
                 items=display_list(self.scene,self.labels.get(),self.facilities.get(),self.protection.get(),board_enlarged=mode[0])
                 selected = modes.get(mode[1])
                 if selected=='F8':
-                    from chart_f8 import saved_region
+                    from chart_f8 import saved_region,layout_items,settings
                     items,_=mode_items(self.scene,selected,items)
+                    items=layout_items(items,settings(self.scene).get('page',{}).get('airport_rotation',0.))
                     full[mode]=(items,saved_region(self.scene,items))
                     return full[mode]
                 if selected and selected!='MAP':
@@ -334,6 +335,7 @@ class Editor15(Editor14):
         cancelled=self._export_cancel=threading.Event()
         with self.processing('正在准备导出快照'):
             snapshot=AirportScene(self.scene.data)
+            snapshot.multicore_enabled=getattr(self,'multicore_enabled',True)
         self._export15=q;self.export_progress15.pack(side='right',padx=8);self.export_progress15.configure(value=0);self.status.set('导出准备中')
         class ExportCancelled(Exception):
             pass

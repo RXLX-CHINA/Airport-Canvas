@@ -40,7 +40,8 @@ def lighting_wireframe(scene,lighting_rows,closed):
         kind = asset['kind']
         props = asset['props']
         points = asset['points']
-        if scene.data['meta'].get('object_display', {}).get(aid,{}).get('hidden') or len(points)<2:
+        style=scene.data['meta'].get('object_display', {}).get(aid,{})
+        if style.get('hidden') or style.get('opacity')==0 or len(points)<2:
             continue
         taxi = kind in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE')
         if taxi or kind in ('RUNWAY','ROAD'):

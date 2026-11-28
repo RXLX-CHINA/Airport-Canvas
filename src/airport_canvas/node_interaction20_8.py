@@ -2,10 +2,11 @@
 import math
 import scene_geometry as g
 
-def resolve(scene,q,anchor,shift,tolerance,exclude=None,tangent=None):
+def resolve(scene,q,anchor,shift,tolerance,exclude=None,tangent=None,visible=None):
     import model20
     from geometry11 import LineString,Point
     axes=model20.axes(scene);axes.update({aid:a for aid,a in scene.assets.items() if a['kind']=='ROAD'})
+    if visible:axes={oid:row for oid,row in axes.items() if visible(oid)}
     if shift:
         perpendicular=[]
         for aid,a in axes.items():

@@ -248,7 +248,10 @@ def plan_rows(scene,generated=None):
                 if kind == 'approach':
                     options = approach[-1]
                     yield configured(asset,'flash',end,options['enabled'] and options['system'] in ('CAT1_B','CAT23'),
-                                     {'length':options['length'],'spacing':30})
+                                     {'length':options['length'],'spacing':30,
+                                      'axis_length':options['length'],'axis_nodes':options.get('axis_nodes',()),
+                                      'axis_radius':options.get('axis_radius',0.),
+                                      'axis_radii':options.get('axis_radii',{})})
         elif asset['kind']=='APRON':
             yield configured(asset,'apron_flood','',False,{'spacing':60})
     from papi21 import rows as papi_rows
@@ -348,7 +351,59 @@ def plan_rows(scene,generated=None):
         yield key, record.get('name') or CUSTOM[record['kind']][0], None, record['kind'], '', record
 
 
-def fixtures(row):
+def approach_frame(runway,end):
+    a,b=runway['points']
+    threshold,other=(a,b) if end=='a' else (b,a)
+    inward=geometry.unit(threshold,other)
+    origin=[p+runway['props'].get('displaced_'+end,0)*u for p,u in zip(threshold,inward)]
+    outward=(-inward[0],-inward[1])
+    normal=(-outward[1],outward[0])
+    return origin,outward,normal
+
+
+def approach_axis(options,*,strict=False):
+    """Control points and evaluated path in the runway-end coordinate frame."""
+    length=options.get('axis_length',options['length'])
+    nodes=[[0.,0.],*[list(point) for point in options.get('axis_nodes',())]]
+    if nodes[-1][0]<1.:
+        nodes.append([1.,0.])
+    controls=[[fraction*length,offset] for fraction,offset in nodes]
+    radius=options.get('axis_radius') or 60.
+    radii=options.get('axis_radii',{})
+    path=controls
+    if len(controls)>2:
+        from curve_model import rounded_nodes,evaluate
+        try:path=evaluate(rounded_nodes(controls,radius,radii)[0])
+        except ValueError:
+            if strict:raise
+    return controls,path
+
+
+def fixtures(row,*,axis_direction=False):
+    _,_,runway,kind,end,options=row
+    if kind not in ('approach','flash') or not options.get('axis_nodes'):
+        yield from _straight_fixtures(row)
+        return
+    from bisect import bisect_right
+    origin,outward,normal=approach_frame(runway,end)
+    _,path=approach_axis(options)
+    stations=[point[0] for point in path]
+    for point,color,direction,phase in _straight_fixtures(row):
+        delta=[p-q for p,q in zip(point,origin)]
+        station=sum(a*b for a,b in zip(delta,outward))
+        index=max(0,min(len(path)-2,bisect_right(stations,station)-1))
+        a,b=path[index:index+2]
+        tangent=geometry.unit(a,b)
+        offset=a[1]+(station-a[0])*(b[1]-a[1])/(b[0]-a[0])
+        lateral=sum(a*b for a,b in zip(delta,normal))
+        x=station-lateral*tangent[1]
+        y=offset+lateral*tangent[0]
+        center=[p+x*u+y*v for p,u,v in zip(origin,outward,normal)]
+        facing=tuple(tangent[0]*u+tangent[1]*v for u,v in zip(outward,normal))
+        yield center,color,facing if direction is not None or axis_direction else None,phase
+
+
+def _straight_fixtures(row):
     _, _, runway, kind, end, options = row
     if runway is None:
         pts = options['points']

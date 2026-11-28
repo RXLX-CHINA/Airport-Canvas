@@ -45,7 +45,7 @@ class Editor7(Editor6):
     def pointer(self,e):
         super().pointer(e)
         if self.mode in ('CONNECT','SPLIT7') or self.mode.startswith('MARK:') and (self.mode[5:] in AXIS_MARKS or self.mode[5:].startswith('RWY_')):
-            hit=snap_path(self.scene,self.world(e.x,e.y),max(.25,12/self.zoom));self._snap_hit=hit;self.canvas.delete('snap_cursor')
+            hit=snap_path(self.scene,self.world(e.x,e.y),max(.25,12/self.zoom),visible=self.can_edit_object);self._snap_hit=hit;self.canvas.delete('snap_cursor')
             if hit:
                 x,y=self.screen(hit[3]);self.canvas.create_oval(x-7,y-7,x+7,y+7,outline='#e84d81',width=2,tags='snap_cursor');self.canvas.create_text(x+10,y-12,text='吸附中线',anchor='w',fill='#a52b54',tags='snap_cursor')
             if self.mode=='CONNECT' and self.connect_ports and hit:
@@ -67,13 +67,13 @@ class Editor7(Editor6):
     def click(self,e):
         p=self.world(e.x,e.y)
         if self.mode=='SPLIT7':
-            hit=snap_path(self.scene,p,max(2,12/self.zoom))
+            hit=snap_path(self.scene,p,max(2,12/self.zoom),visible=self.can_edit_object)
             if hit and self.scene.assets[hit[1]]['kind']!='RUNWAY':
                 try:self.selection=split_route(self.scene,hit[1],hit[2]);self.set_mode('SELECT');self.refresh()
                 except ValueError as exc:self.status.set(str(exc))
             return
         if self.mode=='CONNECT':
-            hit=snap_path(self.scene,p,max(2,12/self.zoom))
+            hit=snap_path(self.scene,p,max(2,12/self.zoom),visible=self.can_edit_object)
             if not hit:self.status.set('请点击跑道或滑行道中线');return
             port=dict(asset=hit[1],station=hit[2],direction=1)
             if not self.connect_ports:self.connect_ports=[port];self.status.set('移动到目标中线查看曲线预览；再点击确认');self.redraw();return
@@ -126,7 +126,7 @@ class Editor7(Editor6):
                     for index,q in enumerate(geometry[2]):
                         if g.distance(p,q)<10/self.zoom:self._guide_drag=dict(data=copy.deepcopy(self.scene.data),index=index);return
         if self.mode.startswith('MARK:'):
-            key=self.mode[5:];hit=snap_path(self.scene,p,max(2,12/self.zoom));spec=CATALOG[key]
+            key=self.mode[5:];hit=snap_path(self.scene,p,max(2,12/self.zoom),visible=self.can_edit_object);spec=CATALOG[key]
             if hit and (key in AXIS_MARKS or key.startswith('RWY_')) and (key in CROSS_POINTS or key in CROSS_PATHS or spec['mode']=='POINT'):
                 self.selection=place_mark(self.scene,key,hit);self.set_mode('SELECT');self.refresh();return
             if spec['mode']=='PATH' and hit:
@@ -140,7 +140,7 @@ class Editor7(Editor6):
         oid=self.selection;a=self.scene.assets.get(oid) or self.auto_assets.get(oid);nodes=copy.deepcopy(self._guide_nodes[oid])
         n=nodes[0 if index==0 else -1];field='p' if endpoint else 'outgoing' if index==0 else 'incoming'
         if endpoint:
-            hit=snap_path(self.scene,p,max(.25,10/self.zoom));p=hit[3] if hit else p;delta=[p[k]-n['p'][k] for k in (0,1)]
+            hit=snap_path(self.scene,p,max(.25,10/self.zoom),visible=self.can_edit_object);p=hit[3] if hit else p;delta=[p[k]-n['p'][k] for k in (0,1)]
             for key in ('p','incoming','outgoing'):n[key]=[n[key][k]+delta[k] for k in (0,1)]
         else:n[field]=list(p)
         if oid in self.scene.assets:set_nodes(self.scene,oid,nodes)

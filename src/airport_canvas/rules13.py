@@ -73,13 +73,30 @@ def runway_extension(scene,points,runway,index=0,preserve_exterior=False,directi
 def asset_guide(scene,a):
     points=a['points']
     manual=a['props'].get('rapid_drawn_axis56',False)
+    extended=set()
     for m in scene.movements.values():
         if not m.get('legacy_attachment'):continue
         own=next((m[k] for k in ('from','to') if m[k]['asset']==a['id']),None)
         other=next((m[k] for k in ('from','to') if scene.assets[m[k]['asset']]['kind']=='RUNWAY'),None)
         if own and other:
-            points=runway_extension(scene,points,scene.assets[other['asset']],0 if own['station']<g.length(a['points'])/2 else -1,
-                                    preserve_exterior=True,rapid=manual or bool(a['props'].get('rapid_exit')))
+            end=0 if own['station']<g.length(a['points'])/2 else -1
+            rapid=manual or bool(a['props'].get('rapid_exit'))
+            if rapid and end in extended:continue
+            extended.add(end)
+            points=runway_extension(scene,points,scene.assets[other['asset']],end,
+                                    preserve_exterior=True,rapid=rapid)
+    if (manual or a['props'].get('rapid_exit')) and not extended:
+        from pavement_geometry import crossings
+        total=g.length(a['points'])
+        for junction in crossings(scene):
+            if a['id'] not in junction['assets']:continue
+            index=junction['assets'].index(a['id'])
+            runway=scene.assets.get(junction['assets'][1-index],{})
+            if runway.get('kind')!='RUNWAY':continue
+            station=junction['stations'][index]
+            if min(station,total-station)<=.05:
+                end=0 if station<total/2 else -1
+                return runway_extension(scene,points,runway,end,preserve_exterior=True,rapid=True)
     return points
 
 def closure_items(scene,items,generated):

@@ -188,16 +188,27 @@ class Editor19(Editor18):
         tolerance=18/max(.001,self.zoom)
         candidates=[]
         margin=width/2+.5
-        for pier in terminal.buildings(self.scene):
-            if pier['props']['building_role19']!='PIER':continue
-            for index,length in terminal.eligible_edges(self.scene,pier):
-                if length<width+2:continue
-                start,end,_,_=terminal.frame(pier,index)
-                distance,station,_=g.project([start,end],q)
-                if distance<=tolerance:
-                    station=max(margin,min(length-margin,station))
-                    point=g.at([start,end],station)[0]
-                    candidates.append((g.distance(point,q),pier['id'],index,station,point))
+        scene=self.scene
+        cache=getattr(self,'_bridge_edges19',None)
+        key=(scene,scene.revision,id(scene.data))
+        if cache is None or cache[0]!=key:
+            edges=[]
+            for pier in terminal.buildings(scene):
+                if pier['props']['building_role19']!='PIER':continue
+                for index,length in terminal.eligible_edges(scene,pier):
+                    start,end,_,_=terminal.frame(pier,index)
+                    edges.append((pier['id'],index,length,start,end))
+            cache=self._bridge_edges19=(key,edges)
+        for aid,index,length,start,end in cache[1]:
+            if length<width+2:continue
+            if not (min(start[0],end[0])-tolerance<=q[0]<=max(start[0],end[0])+tolerance
+                    and min(start[1],end[1])-tolerance<=q[1]<=max(start[1],end[1])+tolerance):
+                continue
+            distance,station,_=g.project([start,end],q)
+            if distance<=tolerance:
+                station=max(margin,min(length-margin,station))
+                point=g.at([start,end],station)[0]
+                candidates.append((g.distance(point,q),aid,index,station,point))
         return min(candidates,default=None)
 
     def preview19(self,q):
@@ -270,7 +281,7 @@ class Editor19(Editor18):
                         width=float(self.values19['pier_width' if mode=='PIER19' else 'bridge_width'])
                         extrude=terminal.extrude_pier if mode=='PIER19' else terminal.extrude_bridge
                         self.selection=extrude(self.scene,aid,index,station,width,length,shear)
-                        self.set_mode('SELECT');self.refresh()
+                        self.finish_extrusion19([self.selection])
                 elif mode=='BRIDGES19':
                     a=self.building_at19(q,'PIER')
                     if a:self.selection=a['id'];self.preview_bridges19()
@@ -291,15 +302,33 @@ class Editor19(Editor18):
         return super().click(e)
     def building_at19(self,q,role):
         from geometry11 import Point,polygon
-        return next((a for a in reversed(terminal.buildings(self.scene)) if a['props']['building_role19']==role and polygon(a['points']).covers(Point(q))),None)
+        return next((a for a in reversed(terminal.buildings(self.scene)) if a['props']['building_role19']==role and self.can_edit_object(a['id']) and polygon(a['points']).covers(Point(q))),None)
     def preview_bridges19(self):
         try:
             snapshot=AirportScene(copy.deepcopy(self.scene.data));ids=terminal.bridges(snapshot,self.selection,int(self.values19['bridge_count']),float(self.values19['bridge_width']),float(self.values19['bridge_length']));self.canvas.delete('preview19')
             for aid in ids:self.canvas.create_polygon(*[v for p in snapshot.assets[aid]['points'] for v in self.screen(p)],fill='',outline='#008da8',width=2,tags='preview19')
             self.status.set(f'{len(ids)} 座廊桥通过重叠检查；点击确认生成')
         except (ValueError,KeyError) as exc:self.status.set(str(exc))
+    def finish_extrusion19(self, ids):
+        if getattr(self,'_rendered_scene50',None) is not self.scene:
+            self.set_mode('SELECT')
+            self.refresh()
+            return
+        # Present the committed geometry while the dependent layers are rebuilt.
+        fresh=set(ids)
+        additions=[item for item in terminal.items(self.scene, building_ids=fresh)
+                   if item['oid'] in fresh]
+        self.render_items=[*self.render_items,*additions]
+        self.set_mode('SELECT')
+        self.schedule_frame()
+        self.schedule_audit()
+        self.update_title()
+
     def commit_bridges19(self):
-        try:terminal.bridges(self.scene,self.selection,int(self.values19['bridge_count']),float(self.values19['bridge_width']),float(self.values19['bridge_length']));self.set_mode('SELECT');self.refresh()
+        try:
+            ids=terminal.bridges(self.scene,self.selection,int(self.values19['bridge_count']),
+                                float(self.values19['bridge_width']),float(self.values19['bridge_length']))
+            self.finish_extrusion19(ids)
         except (ValueError,KeyError) as exc:self.status.set(str(exc))
     def finish_polygon19(self,e=None):
         if self._custom19 not in ('TERMINAL19','OTHER_BUILDING19') or self.values19['shape']!='CUSTOM':return
@@ -341,7 +370,14 @@ class Editor19(Editor18):
         if self._label_drag19:
             d=self._label_drag19;self._label_drag19=None;self.canvas.delete('label_preview19')
             if d['candidate'] is not None:
-                try:__import__('styles19').move_label(self.scene,d['aid'],d['candidate']);self.refresh()
+                try:
+                    mark=self.scene.assets.get(d['aid']) or self.auto_assets.get(d['aid'])
+                    __import__('styles19').move_label(self.scene,d['aid'],d['candidate'],mark)
+                    if mark and mark['props']['mark_type']=='LOCATION':
+                        self.update_title()
+                        self.schedule_frame()
+                        self.schedule_audit()
+                    else:self.refresh()
                 except (ValueError,KeyError) as exc:self.status.set(str(exc))
             return
         transform=getattr(self,'_transform14',None) or getattr(self,'_object_drag11',None)
@@ -367,7 +403,7 @@ class Editor19(Editor18):
         if self._color17:
             self.canvas.delete('runway_labels19')
             for a in self.scene.assets.values():
-                if a['kind']=='RUNWAY':
+                if a['kind']=='RUNWAY' and self.can_edit_object(a['id']):
                     for i,end in [(0,'a'),(-1,'b')]:
                         x,y=self.screen(a['points'][i]);self.canvas.create_text(x,y-16,text='RWY '+a['props'].get('label_'+end,''),fill='#173446',font=('Segoe UI',11,'bold'),tags='runway_labels19')
             self.canvas.tag_raise('view_mode18')

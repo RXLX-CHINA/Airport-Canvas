@@ -11,9 +11,9 @@ PATH_SNAPS={'RUNWAY','TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE'}
 GUIDE_KEYS={'TWY_CENTER','TWY_ENHANCED','TURN_PAD_GUIDE','LEAD_IN','LEAD_OUT','AUX_LEAD','ICAO_AUX_LEAD','ALIGNMENT','PUSHBACK'}
 AXIS_MARKS=CROSS_POINTS|CROSS_PATHS|GUIDE_KEYS|{'RWY_NUMBER','RWY_CENTER','RWY_EDGE','LOCATION','DIRECTION','MAX_SPAN','MANDATORY','NO_ENTRY','HP','PRETHRESHOLD','AIMING_POINT','TDZ_BASIC','TDZ_CODED','CLOSED_RWY','CLOSED_TWY','VOR','VOR_DIRECTION','DISPLACED_ARROW','TURN_PAD_GUIDE','TWY_EDGE','ROAD_STOP'}
 
-def snap_path(scene,p,tolerance=15,exclude=None):
+def snap_path(scene,p,tolerance=15,exclude=None,visible=None):
     from guidance20 import snap_axis
-    assets={aid:a for aid,a in scene.assets.items() if aid!=exclude and a['kind'] in PATH_SNAPS}
+    assets={aid:a for aid,a in scene.assets.items() if aid!=exclude and a['kind'] in PATH_SNAPS and (visible is None or visible(aid))}
     return snap_axis(scene,p,assets,tolerance,pavement=True)
 
 

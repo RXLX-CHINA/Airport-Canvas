@@ -2,6 +2,7 @@ import math
 
 from node_interaction20_8 import edge_insertion
 from node_preview import AltHover,paint_marker
+from stand_pushback import DEFAULT_RADIUS, corner_handle, rounded_path
 
 from PySide6 import QtCore as C, QtGui as G, QtWidgets as W
 
@@ -28,6 +29,8 @@ class StandPreview(W.QWidget):
         self.closed=set()
         self.key=None
         self.nodes={}
+        self.pushback_radii={}
+        self.pushback_owners={}
         self.plan={}
         self.zone_marks={}
         self.bounds=C.QRectF()
@@ -78,7 +81,15 @@ class StandPreview(W.QWidget):
             self.view.selected_node=None
             self.refresh()
 
-    def start_drawing(self,label,points,closed,commit):
+    def snap_pushback(self,owner,point):
+        x=self.plan[owner][2][0][0]
+        scale=max(abs(self.view.transform().m11()),1e-6)
+        if abs(point[0]-x)*scale<=12:
+            return [x,point[1]],True
+        return list(point),False
+
+    def start_drawing(self,label,points,closed,commit,pushback_owner=None):
+        self.view.pushback_draft_owner=pushback_owner
         self.view.draft=points
         self.view.draft_history=[[list(q) for q in points]]
         self.view.draft_index=0
@@ -98,6 +109,7 @@ class StandPreview(W.QWidget):
 
     def cancel_drawing(self):
         self.view.draft=None
+        self.view.pushback_draft_owner=None
         self.view.draft_pointer=None
         self.view.update_insertion(None)
         self.drawing_bar.hide()
@@ -124,10 +136,12 @@ class StandPreview(W.QWidget):
         marks=generated_markings(scene)
         self.zone_marks={k:m for k,m in marks.items() if m['props']['mark_type'] in ('WORK_WAIT','TEMP_WAIT')}
         self.nodes={}
+        self.pushback_radii={}
         self.closed=set()
         self.canvas.clear()
         self.objects.clear()
         groups={}
+        self.pushback_owners={}
         def insert(key,name,points,parent=None):
             item=W.QTreeWidgetItem([name])
             item.setData(0,C.Qt.ItemDataRole.UserRole,key)
@@ -140,8 +154,11 @@ class StandPreview(W.QWidget):
             stand=scene.assets[oid]
             groups[oid]=insert(oid,stand['name'],stand['points'])
         for oid,mark in marks.items():
-            if mark['owner'] in groups:
-                insert(oid,mark['name'],mark['points'],groups[mark['owner']])
+            if mark['owner'] in groups and not mark.get('pushback_parent'):
+                insert(oid,mark['name'],mark.get('design_vertices',mark['points']),groups[mark['owner']])
+                if 'corner_radii' in mark:
+                    self.pushback_radii[oid]=mark['corner_radii']
+                    self.pushback_owners[oid]=mark['owner']
                 from marking_catalog import CATALOG
                 if CATALOG[mark['props']['mark_type']]['mode']=='AREA':self.closed.add(oid)
         for part in display_list(scene,generated=marks):
@@ -175,6 +192,8 @@ class StandPreview(W.QWidget):
             self.bounds=C.QRectF()
         self.canvas.setSceneRect(self.bounds.adjusted(-1000,-1000,1000,1000))
         self.objects.expandToDepth(0)
+        current=self.objects.currentItem()
+        if current and current.parent():current.parent().setExpanded(True)
         first=self.objects.topLevelItem(0)
         if self.objects.currentItem() is None and first:self.objects.setCurrentItem(first)
         self.selectionChanged.emit()
@@ -191,6 +210,7 @@ class StandPreview(W.QWidget):
 
 
 class PreviewView(W.QGraphicsView):
+    pushback_draft_owner=None
     def __init__(self,scene,editor):
         super().__init__(scene)
         self.editor=editor
@@ -226,6 +246,8 @@ class PreviewView(W.QGraphicsView):
         point=(p.x(),-p.y())
         if self.draft and event.modifiers() & C.Qt.KeyboardModifier.ShiftModifier:
             point=snap_45(point,self.draft[-1])
+        if self.pushback_draft_owner is not None:
+            point,_=self.editor.snap_pushback(self.pushback_draft_owner,point)
         return list(point)
 
     def record_drawing(self):
@@ -268,6 +290,27 @@ class PreviewView(W.QGraphicsView):
             return
         super().keyReleaseEvent(event)
 
+    radius_drag = None
+
+    def radius_handles(self, points, radii):
+        for i in range(1,len(points)-1):
+            handle=corner_handle(points,i,radii.get(i,DEFAULT_RADIUS))
+            if handle is None:
+                continue
+            direction,scale,limit,reach=handle
+            x,y=points[i]
+            # Keep the handle selectable even when the radius is zero.
+            gap=14/max(abs(self.transform().m11()),1e-6)
+            tip=self.mapFromScene(x+direction[0]*(reach+gap),-y-direction[1]*(reach+gap))
+            yield i,tip,direction,scale,limit,gap
+
+    def dragged_radius(self, pixel):
+        index,_,direction,scale,limit,gap=self.radius_drag
+        x,y=self.editor.nodes[self.editor.key][index]
+        p=self.mapToScene(pixel)
+        reach=(p.x()-x)*direction[0]+(-p.y()-y)*direction[1]-gap
+        return min(limit,max(0,reach))/scale
+
     def mousePressEvent(self,event):
         button=event.button()
         pos=event.position().toPoint()
@@ -289,6 +332,13 @@ class PreviewView(W.QGraphicsView):
                 self.draft.append(self.drawing_point(event))
                 self.record_drawing()
                 return
+            radii=self.editor.pushback_radii.get(self.editor.key)
+            if radii is not None:
+                for handle in self.radius_handles(points,radii):
+                    if (handle[1]-pos).manhattanLength()<=7:
+                        self.radius_drag=handle
+                        self.last=pos
+                        return
             hits=[((self.mapFromScene(x,-y)-pos).manhattanLength(),i) for i,(x,y) in enumerate(points)]
             if hits:
                 distance,index=min(hits)
@@ -308,6 +358,10 @@ class PreviewView(W.QGraphicsView):
                 bar.setValue(bar.value()-d)
             self.pan=(button,pos)
             return
+        if self.radius_drag is not None:
+            self.last=pos
+            self.viewport().update()
+            return
         if self.grab is not None:
             x,y=self.drag_point(event)
             self.last=self.mapFromScene(x,-y)
@@ -326,12 +380,22 @@ class PreviewView(W.QGraphicsView):
         if len(points)>1 and event.modifiers() & C.Qt.KeyboardModifier.ShiftModifier:
             anchor=points[self.grab-1 if self.grab else 1]
             point=snap_45(point,anchor)
+        owner=self.editor.pushback_owners.get(self.editor.key)
+        if owner is not None and self.grab==len(points)-1:
+            point,_=self.editor.snap_pushback(owner,point)
         return point
 
     def mouseReleaseEvent(self,event):
         if self.pan and event.button()==self.pan[0]:
             self.pan=None
             self.unsetCursor()
+            return
+        if self.radius_drag is not None and event.button()==C.Qt.MouseButton.LeftButton:
+            index=self.radius_drag[0]
+            radius=self.dragged_radius(event.position().toPoint())
+            self.radius_drag=None
+            self.editor.edit_radius(self.editor.key,index,radius)
+            self.editor.refresh()
             return
         if self.grab is not None and event.button()==C.Qt.MouseButton.LeftButton:
             index=self.grab
@@ -344,6 +408,18 @@ class PreviewView(W.QGraphicsView):
 
     def paintEvent(self,event):
         super().paintEvent(event)
+        owner=self.pushback_draft_owner or self.editor.pushback_owners.get(self.editor.key)
+        if owner is None and self.editor.plan:
+            owner=next(iter(self.editor.plan))
+        if owner is not None:
+            x,y=self.editor.plan[owner][2][0]
+            pixel=self.mapFromScene(x,-y)
+            guide=G.QPainter(self.viewport())
+            guide.setPen(G.QPen(G.QColor('#a4eead'),1,C.Qt.PenStyle.DashLine))
+            guide.drawLine(pixel.x(),0,pixel.x(),self.viewport().height())
+            guide.drawText(pixel.x()+6,18,self.editor.caption(
+                '\u6ed1\u884c\u9053\u53c2\u8003\u4e2d\u7ebf','Taxiway reference centreline'))
+            guide.end()
         if self.draft is not None:
             painter=G.QPainter(self.viewport())
             painter.setRenderHint(G.QPainter.RenderHint.Antialiasing)
@@ -372,9 +448,32 @@ class PreviewView(W.QGraphicsView):
                     x,y=points[index]
                     painter.drawLine(self.last,self.mapFromScene(x,-y))
             painter.setPen(G.QPen(G.QColor('#172830'),1.5))
+        radii=self.editor.pushback_radii.get(self.editor.key)
+        if radii is not None:
+            if self.grab is not None:
+                points=list(points)
+                pos=self.mapToScene(self.last)
+                points[self.grab]=(pos.x(),-pos.y())
+            if self.radius_drag is not None:
+                radii=dict(radii)
+                radii[self.radius_drag[0]]=self.dragged_radius(self.last)
+            if self.radius_drag is not None or self.grab is not None:
+                painter.setPen(G.QPen(G.QColor('#ffbb48'),2))
+                painter.drawPolyline(G.QPolygon([self.mapFromScene(x,-y)
+                                                  for x,y in rounded_path(points,radii)]))
+            painter.setPen(G.QPen(G.QColor('#ffbb48'),1))
+            painter.setBrush(G.QColor('#ffbb48'))
+            for i,tip,*_ in self.radius_handles(points,radii):
+                x,y=points[i]
+                painter.drawLine(self.mapFromScene(x,-y),tip)
+                painter.drawRect(C.QRect(tip-C.QPoint(4,4),C.QSize(8,8)))
+            painter.setPen(G.QPen(G.QColor('#172830'),1.5))
         for i,(x,y) in enumerate(points):
             p=self.last if self.grab==i else self.mapFromScene(x,-y)
             painter.setBrush(G.QColor('#ff9300' if i==self.selected_node else '#69e7f2'))
-            painter.drawEllipse(p,5,5)
+            if radii is not None and i==len(points)-1:
+                painter.drawRect(C.QRect(p-C.QPoint(6,6),C.QSize(12,12)))
+            else:
+                painter.drawEllipse(p,5,5)
         painter.end()
         paint_marker(self,self.insertion_pixel)

@@ -14,9 +14,9 @@ def axis(scene,aid):
 def axes(scene):
     return {aid:a for aid in list(scene.assets)+list(scene.movements) if (a:=axis(scene,aid))}
 
-def snap(scene,q,tolerance=3.,parent=None):
+def snap(scene,q,tolerance=3.,parent=None,visible=None):
     from guidance20 import snap_axis
-    return snap_axis(scene,q,{aid:a for aid,a in axes(scene).items() if parent is None or aid==parent},tolerance)
+    return snap_axis(scene,q,{aid:a for aid,a in axes(scene).items() if (parent is None or aid==parent) and (visible is None or visible(aid))},tolerance)
 
 
 def entry_point(scene,a):

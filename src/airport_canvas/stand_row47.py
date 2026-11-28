@@ -165,6 +165,17 @@ class StandRow:
         kind=saved.get('kind')
         stand_kind.setCurrentIndex(kinds.index(kind) if kind in kinds else 0)
         show_zones(stand_kind.currentIndex())
+        single_number=QComboBox();single_number.addItems([tr('默认机位编号'),tr('引入线中线单编号')])
+        single_number.setCurrentIndex(int(bool(saved.get('single_lead_number',False))))
+        form.addRow(tr('机位编号标识'),single_number)
+        directions={}
+        for key,label in (('lead_direction','引入线方向'),('exit_direction','引出线方向')):
+            field=QComboBox()
+            for code,caption in (('BOTH','两侧'),('LEFT','左侧'),('RIGHT','右侧')):
+                field.addItem(tr(caption),code)
+            field.setCurrentIndex(max(0,field.findData(saved.get(key,'BOTH'))))
+            form.addRow(tr(label),field)
+            directions[key]=field
         lead=QComboBox();lead.addItems(['A','B','C','D','ICAO'])
         restore_choice(lead,saved.get('lead'))
         for label,control in (('数量',count),('起始机位号',first),('停止线机型',aircraft),
@@ -209,9 +220,10 @@ class StandRow:
             return
         values=dict(kind=kinds[stand_kind.currentIndex()],count=count.value(),first=first.value(),
                     span=span.value(),length=size.value(),lead=lead.currentText(),opposed_gap=gap.value(),
-                    stops=stops_by_kind,
+                    stops=stops_by_kind,single_lead_number=bool(single_number.currentIndex()),
                     work_zones={key:field.currentData() for key,(field,_) in zones.items()},
                     ga={key:field.text() for key,field in ga_controls.items()})
+        values.update({key:field.currentData() for key,field in directions.items()})
         try:
             save_batch_stand_preferences(app._preferences34,values)
         except OSError as exc:
@@ -224,6 +236,8 @@ class StandRow:
         self.ga={key:field.text() for key,field in ga_controls.items()} if stand_kind.currentIndex() in (2,4) else None
         self.work_zones={key:field.currentData() for key,(field,_) in zones.items()
                          if not self.helicopter and self.ga is None and (key!='work_zone')==self.remote}
+        self.work_zones['single_lead_number']=values['single_lead_number']
+        self.work_zones.update({key:values[key] for key in directions})
         self.options=(count.value(),first.value(),self.stop_rows,span.value(),size.value(),lead.currentText())
         app._stand_row=self
         app.status.set('批量绘制机位：选择滑行道中线上的起点。')
@@ -236,6 +250,7 @@ class StandRow:
         self.overlap_style=overlap
         self.ga=None
         self.helicopter=False
+        self.work_zones={}
         self.options=(count,first,[],1.,1.,'A')
         self.app.set_mode('SELECT')
         self.app._stand_row=self
@@ -247,7 +262,7 @@ class StandRow:
     def hit(self,event):
         app=self.app
         axes={oid:axis for oid,axis in model20.axes(app.scene).items()
-              if axis['kind'] in model20.TAXIS and (self.anchor is None or oid==self.anchor[1])}
+              if axis['kind'] in model20.TAXIS and app.can_edit_object(oid) and (self.anchor is None or oid==self.anchor[1])}
         from guidance20 import snap_axis
         return snap_axis(app.scene,self.point(event),axes,9/max(.001,app.zoom))
 
@@ -285,7 +300,7 @@ class StandRow:
         from shapely.ops import nearest_points
         from stand15 import remote_exit_hit
         app=self.app
-        hit=remote_exit_hit(app.scene,point,9/max(.001,app.zoom))
+        hit=remote_exit_hit(app.scene,point,9/max(.001,app.zoom),visible=app.can_edit_object)
         if not hit or hit[1]==self.anchor[1]:return None,[],[]
         target=LineString(model20.axis(app.scene,hit[1])['points'])
         near,far=[],[]
@@ -368,7 +383,7 @@ class StandRow:
         from stand15 import remote_exit_hit
         bindings=None
         if self.exit_rows is not None:
-            hit=remote_exit_hit(app.scene,self.point(event),9/max(.001,app.zoom))
+            hit=remote_exit_hit(app.scene,self.point(event),9/max(.001,app.zoom),visible=app.can_edit_object)
             if not hit:
                 app.status.set('请点击出口滑行道中线。')
                 return 'break'
@@ -456,7 +471,7 @@ class StandRow:
         if self.extent:
             from stand15 import draw_exit_snap, remote_exit_hit, remote_exit_lines
             point=self.point(event)
-            hit=remote_exit_hit(app.scene,point,9/max(.001,app.zoom)) if self.exit_rows else None
+            hit=remote_exit_hit(app.scene,point,9/max(.001,app.zoom),visible=app.can_edit_object) if self.exit_rows else None
             if self.head_to_head:
                 hit,near,far=self.opposed_layout(point,bool(event.state&1))
                 rows=near+far
@@ -467,7 +482,7 @@ class StandRow:
                 template=self.presets[index%len(self.presets)] if self.presets else {}
                 preview_stops=template.get('stops',self.options[2])
                 if index<len(bindings) and bindings[index]:
-                    sample=dict(points=[q,end],props=bindings[index])
+                    sample=dict(points=[q,end],props={**bindings[index],**self.work_zones,**template})
                     for path in remote_exit_lines(sample,app.scene):
                         canvas.create_line(*[pixel for p in path for pixel in app.screen(p)],
                                            fill='#11a8bd',width=2,tags='stand_row_preview')

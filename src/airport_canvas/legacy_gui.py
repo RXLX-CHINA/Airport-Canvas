@@ -83,7 +83,7 @@ class AirportApp(tk.Tk):
     def __init__(self,scene=None):
         super().__init__();self.title('Airport Scene Studio · 机场场面编辑器')
         self.geometry('1480x940');self.minsize(1080,720)
-        self.scene=scene or AirportScene.demo();self.filepath=None;self.saved=json.dumps(self.scene.data,sort_keys=True)
+        self.scene=scene or AirportScene.demo();self.filepath=None;self.saved=copy.deepcopy(self.scene.data)
         self.selection=None;self.mode='SELECT';self.points=[];self.connect_ports=[];self.drag=None;self.route_preview=None
         self.zoom=0.4;self.origin=[500.,500.];self.render_items=[];self.report={};self.simulation=False
         self.labels=tk.BooleanVar(value=True);self.facilities=tk.BooleanVar(value=True);self.protection=tk.BooleanVar(value=True)
@@ -171,20 +171,30 @@ class AirportApp(tk.Tk):
             menu.add_command(label=NAMES[kind],command=lambda k=kind:self.set_mode(k))
         menu.tk_popup(self.winfo_pointerx(),self.winfo_pointery())
 
+    def can_edit_object(self,oid):
+        styles=self.scene.data['meta'].get('object_display',{})
+        asset=self.scene.assets.get(oid) or getattr(self,'auto_assets',{}).get(oid) or {}
+        keys=[oid,asset.get('owner'),asset.get('props',{}).get('label_asset')]
+        if oid in self.scene.movements:
+            movement=self.scene.movements[oid]
+            keys.extend(movement[end]['asset'] for end in ('from','to'))
+        return not any(styles.get(key,{}).get('hidden') or styles.get(key,{}).get('opacity')==0 for key in keys)
+
     def pick(self,p,paths_only=False):
         threshold=10/self.zoom;best=None
         for aid,a in self.scene.assets.items():
-            if a['kind'] in PATH_KINDS:
+            if a['kind'] in PATH_KINDS and self.can_edit_object(aid):
                 d,station,q=g.project(a['points'],p)
                 hit=d<max(threshold,a['props']['width']/2)
                 if hit and (best is None or d<best[0]):best=(d,aid,station,q)
         if best:return best
         if not paths_only:
             for mid in reversed(list(self.scene.movements)):
+                if not self.can_edit_object(mid):continue
                 d,station,q=g.project(self.scene.movement_path(mid),p)
                 if d<max(threshold,self.scene.movements[mid]['width']/2):return d,mid,station,q
             for aid,a in reversed(list(self.scene.assets.items())):
-                if a['kind'] in AREA_KINDS and g.inside(p,a['points']):return 0,aid,0,p
+                if a['kind'] in AREA_KINDS and self.can_edit_object(aid) and g.inside(p,a['points']):return 0,aid,0,p
         return None
 
     def click(self,e):
@@ -463,7 +473,7 @@ class AirportApp(tk.Tk):
         if self.scene.undo():self.selection=None;self.route_preview=None;self.refresh()
     def redo(self):
         if self.scene.redo():self.selection=None;self.route_preview=None;self.refresh()
-    def dirty(self):return json.dumps(self.scene.data,sort_keys=True)!=self.saved
+    def dirty(self):return self.scene.data!=self.saved
     def update_title(self):self.title(('● ' if self.dirty() else '')+'Airport Scene Studio · '+(self.filepath.name if self.filepath else self.scene.data['meta']['name']))
     def confirm_leave(self):
         if not self.dirty():return True
@@ -471,13 +481,13 @@ class AirportApp(tk.Tk):
         return self.save() if answer else answer is not None
     def new(self):
         if not self.confirm_leave():return
-        self.scene=AirportScene();self.filepath=None;self.saved=json.dumps(self.scene.data,sort_keys=True);self.selection=None;self.route_preview=None;self.set_mode('SELECT');self.refresh();self.fit()
+        self.scene=AirportScene();self.filepath=None;self.saved=copy.deepcopy(self.scene.data);self.selection=None;self.route_preview=None;self.set_mode('SELECT');self.refresh();self.fit()
     def open(self):
         if not self.confirm_leave():return
         p=filedialog.askopenfilename(title='打开机场场景',filetypes=[('机场场景','*.airport.json'),('JSON','*.json')])
         if not p:return
         try:
-            scene=AirportScene.load(p);self.scene=scene;self.filepath=Path(p);self.saved=json.dumps(scene.data,sort_keys=True);self.selection=None;self.route_preview=None;self.set_mode('SELECT');self.refresh();self.fit()
+            scene=AirportScene.load(p);self.scene=scene;self.filepath=Path(p);self.saved=copy.deepcopy(scene.data);self.selection=None;self.route_preview=None;self.set_mode('SELECT');self.refresh();self.fit()
         except (ValueError,OSError,TypeError,KeyError) as exc:messagebox.showerror('打开失败',str(exc)+'\n旧版参数文件请使用“导入旧版”菜单。',parent=self)
     def save(self,save_as=False):
         p=self.filepath
@@ -485,7 +495,7 @@ class AirportApp(tk.Tk):
             chosen=filedialog.asksaveasfilename(title='保存机场场景',defaultextension='.airport.json',filetypes=[('机场场景','*.airport.json')])
             if not chosen:return False
             p=Path(chosen)
-        try:self.scene.save(p);self.filepath=p;self.saved=json.dumps(self.scene.data,sort_keys=True);self.update_title();self.status.set('已保存 '+str(p));return True
+        try:self.scene.save(p);self.filepath=p;self.saved=copy.deepcopy(self.scene.data);self.update_title();self.status.set('已保存 '+str(p));return True
         except (OSError,ValueError) as exc:messagebox.showerror('保存失败',str(exc),parent=self);return False
     def export(self,kind):
         p=filedialog.asksaveasfilename(title='导出整场设计预览',defaultextension='.'+kind,filetypes=[(kind.upper(),'*.'+kind)])

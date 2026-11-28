@@ -64,14 +64,13 @@ def generated(scene):
             if ground and L>=20 and ground_choices:
                 layout.append((False,min(ground_choices,key=lambda c:c[:3]),None))
             if boards:
-                seen=set()
+                junctions={}
                 for choice in sorted(choices,key=lambda c:(c[1],c[2],c[3])):
-                    for branch,symbol in enumerate(choice[-1]):
-                        key=(round(choice[1],3),choice[2],symbol)
-                        if key in seen:continue
-                        seen.add(key)
-                        layout.append((True,(*choice[:-1],[symbol]),branch))
-            for board,(_,station,bid,t,name,own,arrows),branch in layout:
+                    junctions.setdefault(round(choice[1],3),[]).append(choice)
+                for group in junctions.values():
+                    layout.append((True,group[0],group))
+            for board,(_,station,bid,t,name,own,arrows),group in layout:
+                panels=intersection_panels(group,station,own,width) if board else None
                 available=station if sign>0 else L-station
                 before=(60 if (p.get('code_number') or meta.get('code_number',4)) in (3,4) else 40) if board else max(12,width)
                 if board:
@@ -88,9 +87,11 @@ def generated(scene):
                 at=station-sign*before;q,u=g.at(a['points'],at);u=[x*sign for x in u];v=[-u[1],u[0]];h=.4 if board else min(2,(width/2-2-len(arrows)*3)/max(.6,len(name)*.6))
                 if not board and h<2:continue
                 tw=(len(name)*.6+len(arrows)*.55)*h if board else len(name)*.6*h+len(arrows)*3;lateral=width/2+11+tw/2 if board else -(1+tw/2);q=[q[k]+v[k]*lateral for k in (0,1)]
-                text=board_text(name,arrows) if board else pavement_text(name,arrows);suffix=('BOARD20_18:'+str(sign)+':'+bid+':'+str(round(station,3))+':'+str(branch)
+                text=board_text(name,arrows) if board else pavement_text(name,arrows);suffix=('BOARD20_18:'+str(sign)+':'+bid+':'+str(round(station,3))+':0'
                         if board else 'DIRECTION20_18:'+str(sign))
                 m=synthetic(aid,'DIRECTION',[q,[q[k]+u[k]*10 for k in (0,1)]],suffix,text=text,text_height=h,information_profile20_18='BOARD' if board else 'PAVEMENT',direction_name20_18=name,direction_arrows20_18=arrows,location_name20_18=own if board else '',destination_asset20_18=bid,auto_direction20_18=True,standard_clause20_18='9.7.4.3' if board else '8.2.13')
+                if panels:
+                    m['props']['sign_panels24']=panels
                 m['name']='方向标记牌组' if board else '道面方向信息标志';out[m['id']]=m
     out.update(__import__("signs21_2").extra(scene,routes,ground,boards))
     if boards:
@@ -104,7 +105,11 @@ def intersection_panels(choices,station,location,width):
     for _,at,_,_,name,_,arrows in choices:
         if abs(at-station)<=max(2,width*.2):
             approaches.setdefault(name,set()).update(arrows)
-    if len(approaches)<2:return None
+    if len(approaches)==1:
+        name,arrows=next(iter(approaches.items()))
+        from signs21_2 import ordered
+        return [dict(kind='location',label=location,arrows=[]),
+                dict(kind='yellow',label=name,arrows=ordered(arrows))]
     ordering='↙←↖↑↗→↘↓'
     left=[]
     right=[]

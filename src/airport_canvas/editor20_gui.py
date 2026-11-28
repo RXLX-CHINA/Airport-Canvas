@@ -84,6 +84,7 @@ class Editor20(Editor19):
         mandatory=ttk.Button(self.tool_buttons['SELECT'].master,image=photo,command=self.standardize_mandatory20)
         mandatory.q.setAccessibleName('统一跑道号强制性标识')
         mandatory.pack(side='left',padx=2)
+        self.action_buttons11.update(NO_ENTRY=self.no_entry_button,MANDATORY=mandatory)
         self.tip11(mandatory,'统一跑道编号强制指令标识的尺寸和位置')
     def clear_previews20(self):
         self._world_preview20=[];self._last_pointer20=None;self._last_event20=None
@@ -140,7 +141,7 @@ class Editor20(Editor19):
         if self._custom19!='ENHANCED19':return super().preview19(q)
         now=time.monotonic()
         if now-self._preview_clock20<.03:return
-        self._preview_clock20=now;hit=guidance20.snap(self.scene,q,12/max(.001,self.zoom));self._world_preview20=[];self.canvas.delete('preview19')
+        self._preview_clock20=now;hit=guidance20.snap(self.scene,q,12/max(.001,self.zoom),visible=self.can_edit_object);self._world_preview20=[];self.canvas.delete('preview19')
         if hit:
             _,source,s,p=hit;a=guidance20.routes(self.scene)[source]
             try:
@@ -191,10 +192,19 @@ class Editor20(Editor19):
                 props=m if m else a['props']
                 self.property_field(self.section('快速脱离道标记'),'hide_entry_markings43',
                                     '关闭进入道面标记',props.get('hide_entry_markings43',False),'bool')
-            if source(self.scene,self.selection):
+            if a and a['props'].get('rapid_drawn_axis56'):
+                page=self.section('快速脱离道几何')
+                for key,label in (('reverse_join_radius','滑行道侧反向引导线半径（m，0 为自动）'),
+                                  ('reverse_surface_radius','滑行道侧反向道面半径（m，0 跟随引导线）')):
+                    self.property_field(page,key,label,a['props'].get(key,0.),'float')
+            state=source(self.scene,self.selection)
+            if state:
                 page=self.section('快速脱离道几何')
                 ttk.Button(page,text='两端半径与直线段…',command=lambda:open_dialog(self)).grid(
                     row=0,column=0,columnspan=2,sticky='ew',pady=4)
+            elif a and a['props'].get('rapid_drawn_axis56'):
+                ttk.Label(self.section('快速脱离道几何'),text='将两端接到跑道和接收滑行道中线后可拟合。',
+                          wraplength=245).grid(row=3,column=0,columnspan=2,sticky='w')
             if a and a['kind']=='APRON':
                 import signs21_2
                 self.property_field(self.section('机坪用途'),'destination_code23','目的地牌面',signs21_2.apron_name(a),'text',signs21_2.DESTINATIONS)
@@ -281,6 +291,7 @@ class Editor20(Editor19):
                 cache=self._rapid_f6_paths=(self.render_items,rapid_f6_guides(self.render_items))
             rapid_paths=cache[1]
             for oid,paths in rapid_paths.items():
+                if not self.can_edit_object(oid):continue
                 owner=model.axis(self.scene,oid)
                 movement=self.scene.movements.get(oid,{})
                 for path in paths:
@@ -307,9 +318,10 @@ class Editor20(Editor19):
                 if not key.startswith('G20-') and 'guidance_owner20' not in route['props']:continue
                 owner_id=route['props'].get('guidance_owner20')
                 owner=self.scene.assets.get(owner_id) or model.axis(self.scene,owner_id)
-                if not owner:continue
+                if not owner or not self.can_edit_object(owner_id):continue
                 station=g.project(owner['points'],route['points'][0])[1];name=segments18.piece_at(owner,station)['name'];color=color_name(name);self.canvas.create_line(*[v for q in route['points'] for v in self.screen(q)],fill=color,width=3,tags='movement_names20')
             for mid,m in self.scene.movements.items():
+                if not self.can_edit_object(mid):continue
                 a=model.axis(self.scene,mid)
                 if not a:
                     if mid in rapid_paths or m.get('legacy_attachment') or not m.get('guide_visible',True):continue
@@ -524,7 +536,7 @@ class Editor20(Editor19):
                 cache=self._runway_guide_pick32=(items,[item for item in items if item.get('runway_junction_guide32')
                                                        and not item.get('black_underlay')])
             hits=[(distance,item['oid'],station,q) for item in cache[1]
-                  for distance,station,q in [g.project(item['points'],p)] if distance<=5/max(.001,self.zoom)]
+                  for distance,station,q in [g.project(item['points'],p)] if self.can_edit_object(item['oid']) and distance<=5/max(.001,self.zoom)]
             if hits:return min(hits,key=lambda hit:hit[0])
         picked=super().pick(p,paths_only)
         if paths_only or self.mode!='NODES':return picked
@@ -556,7 +568,7 @@ class Editor20(Editor19):
         vertices=remote_exit_vertices(stand,self.scene)
         hit=None
         if index==len(vertices)-1:
-            hit=remote_exit_hit(self.scene,point,10/max(.001,self.zoom))
+            hit=remote_exit_hit(self.scene,point,10/max(.001,self.zoom),visible=self.can_edit_object)
             if hit:point=hit[3]
         else:
             props=stand['props']
@@ -657,7 +669,7 @@ class Editor20(Editor19):
             if self._color17:oid=self.pick_f6_connection20_2(e) or oid
             if oid:
                 oid=__import__('transform11').owner(self.scene,oid,self.auto_assets)
-                unit=__import__('branch_selection20_15').chain(self.scene,oid)
+                unit={key for key in __import__('branch_selection20_15').chain(self.scene,oid) if self.can_edit_object(key)}
                 current=set(self.selected_ids) if self.selected_ids else ({self.selection} if self.selection else set())
                 chosen=current-unit if unit<=current else current|unit
                 order=[aid for aid in getattr(self,"_boolean_order",[self.selection]) if aid in chosen]
@@ -686,7 +698,7 @@ class Editor20(Editor19):
                         if g.distance(p,q)<=10/max(.001,self.zoom):
                             self._marquee12=None;self._drag10=dict(data=copy.deepcopy(self.scene.data),index=index,kind='control',selection=self.selection,branch=self._branch);return
             oid=__import__('connection20_2').pick_axis(self.scene,p,max(.05,8/max(.001,self.zoom)))
-            if oid in self.scene.movements and not getattr(e,'state',0)&4:
+            if oid in self.scene.movements and self.can_edit_object(oid) and not getattr(e,'state',0)&4:
                 self._logical_station18=g.project(self.scene.movement_path(oid),p)[1]
                 self._active_piece18=(oid,__import__('segments18').piece_at(__import__('segments18').route(self.scene,oid),self._logical_station18)['id'])
                 self._marquee12=None;self.select(oid);self.redraw();self.status.set('已选中独立连接道：拖动端点调整交汇位置，拖动控制柄调整曲线；右侧修改编号或切换直线。');return
@@ -697,7 +709,7 @@ class Editor20(Editor19):
                 if self.mode!='SELECT':self.set_mode('SELECT')
                 self.select(oid);self.redraw();self.status.set('已选择连接道，可在右侧修改独立编号或名称');return
         if self._custom19=='ENHANCED19':
-            hit=guidance20.snap(self.scene,self.world(e.x,e.y),12/max(.001,self.zoom))
+            hit=guidance20.snap(self.scene,self.world(e.x,e.y),12/max(.001,self.zoom),visible=self.can_edit_object)
             if not hit:self.status.set('请点击可见的直线或转弯引导中线');return
             try:self.selection=guidance20.select(self.scene,hit,float(self.values19['enhanced_length']),self.values19['enhanced_direction']);self.set_mode('SELECT');self.refresh()
             except ValueError as exc:self.status.set(str(exc))
@@ -706,7 +718,7 @@ class Editor20(Editor19):
             x,y,aid=self._entry_handle20
             if math.hypot(e.x-x,e.y-y)<=11:self._entry_drag20=dict(aid=aid,original=copy.deepcopy(self.scene.assets[aid]),candidate=None);self._marquee12=None;return
         if self.mode=='STAND' and not self.points:
-            hit=model.snap(self.scene,self.world(e.x,e.y),12/max(.001,self.zoom))
+            hit=model.snap(self.scene,self.world(e.x,e.y),12/max(.001,self.zoom),visible=self.can_edit_object)
             if hit and hit[1] in self.scene.movements:self._stand_start11=hit;self.points=[hit[3]];self.redraw();return
         return super().click(e)
     def pick_f6_connection20_2(self,e):
@@ -716,8 +728,9 @@ class Editor20(Editor19):
                 for tag in c.gettags(item):
                     if tag.startswith('f6_owner20_2:'):
                         oid=tag.split(':',1)[1]
-                        if oid in self.scene.movements:return oid
-        return __import__('connection20_2').pick_axis(self.scene,self.world(e.x,e.y),max(.05,10/max(.001,self.zoom)))
+                        if oid in self.scene.movements and self.can_edit_object(oid):return oid
+        oid=__import__('connection20_2').pick_axis(self.scene,self.world(e.x,e.y),max(.05,10/max(.001,self.zoom)))
+        return oid if oid and self.can_edit_object(oid) else None
     def set_connection_shape20_2(self,geometry):
         if self.selection not in self.scene.movements:return
         try:self.scene.update_movement(self.selection,geometry=geometry);self.refresh();self.status.set('连接线已改为'+('直线' if geometry=='STRAIGHT' else '曲线'))
@@ -745,7 +758,7 @@ class Editor20(Editor19):
         polygon_drag=self.__dict__.get('_polygon_drag20_7')
         if polygon_drag:
             d=polygon_drag;q=self.world(e.x,e.y)
-            q,hit=__import__('node_interaction20_8').resolve(self.scene,q,d['points'][d['index']],bool(getattr(e,'state',0)&1),max(.25,12/max(.001,self.__dict__.get('zoom',4))),d['aid'])
+            q,hit=__import__('node_interaction20_8').resolve(self.scene,q,d['points'][d['index']],bool(getattr(e,'state',0)&1),max(.25,12/max(.001,self.__dict__.get('zoom',4))),d['aid'],visible=self.can_edit_object)
             points=copy.deepcopy(d['points']);points[d['index']]=q
             try:__import__('polygon_edit20_7').checked(points);d['candidate']=q;color='#008da8'
             except ValueError:d['candidate']=None;color='#d52c3a'
@@ -769,7 +782,7 @@ class Editor20(Editor19):
         if self._entry_drag20:
             d=self._entry_drag20;a=copy.deepcopy(d['original']);parent=model.axis(self.scene,a['props'].get('entry_asset'));q=self.world(e.x,e.y)
             if not parent:return
-            hit=model.snap(self.scene,q,max(.25,12/max(.001,self.__dict__.get('zoom',4))))
+            hit=model.snap(self.scene,q,max(.25,12/max(.001,self.__dict__.get('zoom',4))),visible=self.can_edit_object)
             if hit:parent=model.axis(self.scene,hit[1])
             if getattr(e,'state',0)&1:
                 if hit:q=g.project(parent['points'],a['points'][-1])[2]

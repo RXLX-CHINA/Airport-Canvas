@@ -159,6 +159,7 @@ add('ROAD_DIVIDER','车道分界线','道路与限制使用','6.2.23','PATH','da
 add('ROAD_ARROW','行车方向箭头','道路与限制使用','项目道路设计','POINT','road_arrow',dict(width=3))
 
 def primitives(asset):
+    if asset['props'].get('lead_crossing_hidden'):return []
     if asset['props'].get('information_profile20_18'):return __import__('directions20_18').primitives(asset)
     p=asset['props'];spec=CATALOG[p['mark_type']];shape=spec['shape'];pts=asset['points'];oid=asset['id'];out=[]
     if spec.get('renderer')=='apron':
@@ -371,8 +372,10 @@ def primitives(asset):
         c=RED if shape=='red_hatch' else WHITE
         if not p.get('omit_outline',False):poly(pts,None,c,lw,dash=[1,.5] if shape=='temp_wait' else [.5,1] if p['mark_type']=='SAFETY_OVERLAP' else None)
         if shape in ('red_hatch','white_hatch','pallets'):
-            angle=math.degrees(math.atan2(pts[1][1]-pts[0][1],pts[1][0]-pts[0][0])) if shape=='pallets' else 45
-            for segment in hatch_segments(pts,p.get('spacing',2)+(lw if shape in ('red_hatch','white_hatch') else 0),angle):stroke(segment,c,lw)
+            angle=p.get('hatch_angle',45)
+            if shape=='pallets' and 'hatch_angle' not in p:
+                angle=math.degrees(math.atan2(pts[1][1]-pts[0][1],pts[1][0]-pts[0][0]))
+            for segment in hatch_segments(pts,p.get('spacing',2)+(lw if shape in ('red_hatch','white_hatch') else 0),angle,p.get('hatch_phase',0)):stroke(segment,c,lw)
         if p.get('text'):
             center=[sum(q[k] for q in pts)/len(pts) for k in (0,1)];out.append(dict(type='text',oid=oid,points=[center],text=p['text'],fill=c,size=height,rotation=0,world_text=True,font='hei'))
     elif shape=='chocks':box(-width/2+.075,-width/2+.075,width/2-.075,width/2-.075,None,WHITE,.15);text(p.get('text','轮挡'),0,0,WHITE,height,font='hei',rotation=angle+90,text_width=max(.1,min(width-.3,len(p.get('text','轮挡'))*height*.65)))

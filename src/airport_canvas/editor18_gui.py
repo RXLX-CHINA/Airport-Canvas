@@ -27,7 +27,7 @@ class Editor18(Editor17):
         point=Point(q);tolerance=max(.25,12/max(.001,self.zoom));choices=[]
         for i in tree.query(point.buffer(max(half,tolerance))):
             i=int(i);d=axes[i].distance(point);a=routes[i]
-            if d<=max(tolerance,a['props']['width']/2):
+            if self.can_edit_object(a['id']) and d<=max(tolerance,a['props']['width']/2):
                 station=axes[i].project(point);p=axes[i].interpolate(station);choices.append((d,a['id'],station,[p.x,p.y]))
         return min(choices,key=lambda x:(x[0],x[1]!=self.selection)) if choices else None
     def draw_color18(self):
@@ -36,8 +36,12 @@ class Editor18(Editor17):
         from segments16 import color_name
         from scene_render import rapid_f6_guides
         c=self.canvas;c.delete('color17');c.itemconfigure('map',state='hidden')
-        for tag in ('overlay','frame11','semantic14','corner_handles12','cut_preview11','snap_cursor'):c.delete(tag)
-        self._frame_box11=None;self._handles14=[];key=(id(self.scene),self.scene.revision)
+        if not getattr(getattr(self,'view_tools21_2',None),'active',False):
+            self.draw_f6_buildings17()
+        if not self.__dict__.get('_common_display_tool',False):
+            for tag in ('overlay','frame11','semantic14','corner_handles12','cut_preview11','snap_cursor'):c.delete(tag)
+            self._frame_box11=None;self._handles14=[]
+        key=(id(self.scene),self.scene.revision)
         if not self._outline_cache18 or self._outline_cache18[0]!=key:self._outline_cache18=(key,contours(self.scene))
         for color,pts in self._outline_cache18[1]:c.create_line(*[v for q in pts for v in self.screen(q)],fill=color,width=1,tags='color17')
         if not self._logical_view18 or self._logical_view18[0]!=key:
@@ -56,16 +60,18 @@ class Editor18(Editor17):
         if not cache or cache[0] is not self.render_items:
             cache=self._rapid_f6_paths=(self.render_items,rapid_f6_guides(self.render_items))
         for a in virtual.values():
-            if a['asset'] in cache[1]:continue
+            if a['asset'] in cache[1] or not self.can_edit_object(a['asset']):continue
             c.create_line(*[v for q in a['points'] for v in self.screen(q)],fill=palette[a['name']],
                           width=5 if (a['asset'],a['part'])==self._active_piece18 else 3,tags='color17')
         w,h=c.winfo_width(),c.winfo_height();xs,ys=zip(*(self.world(x,y) for x,y in ((0,0),(w,0),(w,h),(0,h))));box=(min(xs),min(ys),max(xs),max(ys))
-        for oid,text,q in visible_labels(type('View',(),{'assets':virtual})(),box):
+        for oid,text,q in visible_labels(type('View',(),{'assets':{oid:a for oid,a in virtual.items() if self.can_edit_object(a['asset'])}})(),box):
             x,y=self.screen(q);width=max(36,len(text)*13+14);x=max(width/2+3,min(w-width/2-3,x));y=max(20,min(h-16,y-15));c.create_rectangle(x-width/2,y-11,x+width/2,y+11,fill='#21303e' if getattr(self,'_dark_mode24',False) else 'white',outline=palette[text],tags='color17');c.create_text(x,y,text=text,fill='#e5eff7' if getattr(self,'_dark_mode24',False) else '#173446',font=('Segoe UI',11,'bold'),tags='color17')
         self.draw_scale14()
     def redraw(self):
         if not hasattr(self,'canvas'):return
         if self._color17:
+            if self.__dict__.get('_common_display_tool',False):
+                super(Editor17,self).redraw()
             if hasattr(self,"grid_visible"):self.draw_grid7()
             self.draw_color18()
         else:super().redraw()

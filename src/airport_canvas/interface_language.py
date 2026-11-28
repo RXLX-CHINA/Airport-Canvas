@@ -14,6 +14,16 @@ EN = {
     '该节点是必要的端点，不能删除。': 'This endpoint is required.',
     '已达到此对象的最少节点数。': 'This object has the minimum number of nodes.',
     '升降带': 'Runway strip',
+    '机场主体旋转角度': 'Airport map rotation',
+    '绘制标识': 'Draw sign',
+    '绘制真北箭头（先点箭尾，再点箭头）': 'Draw a true north arrow (tail, then tip)',
+    '在位图上点真北箭头的顶端。': 'Click the tip of the true north arrow on the image.',
+    '在位图上点真北箭头的起点。': 'Click the tail of the true north arrow on the image.',
+    '无法识别该图片，或图片超过 1 亿像素。': 'The image could not be read or exceeds 100 megapixels.',
+    '编辑进近灯光中轴': 'Edit approach lighting axis',
+    '中轴圆角半径（0 为折线）': 'Axis fillet radius (0 for corners)',
+    '进近灯光中轴：Alt+单击插点，拖动节点，Delete 删除，Esc 退出。':
+        'Approach lighting axis: Alt-click to insert, drag to move, Delete to remove, Esc to exit.',
     '切换临时图层透明度': 'Toggle temporary layer transparency',
     '临时图层透明度（%）': 'Temporary layer transparency (%)',
     '临时图层透明度须在 0% 到 100% 之间。': 'Temporary layer transparency must be between 0% and 100%.',
@@ -222,7 +232,7 @@ EN.update({
     '显示全部转弯':'Show All Turns','隐藏全部转弯':'Hide All Turns','所见即所得机场图编辑':'Aerodrome Chart Editor',
     '绘图操作说明':'Drawing Help','更多工程参数':'More Project Parameters',
     '保存到项目':'Save to Project','合并命名':'Merge Designations','图面与标记牌':'Surface Markings and Signs',
-    '显示与操作':'Display and Controls','自动保存工程副本':'Autosave Project Copy',
+    '显示与操作':'Display and Controls','启用多核性能优化':'Enable multicore optimization','自动保存工程副本':'Autosave Project Copy',
     '自动保存间隔（分钟）':'Autosave Interval (minutes)','车辆行驶方向':'Vehicle Travel Direction',
     '编辑所选对象属性':'Edit Selected Object Properties','聚焦所选对象':'Focus Selected Object',
     '操作说明':'Instructions','道面材质':'Surface Material','跑道编号':'Runway Designation',
@@ -368,6 +378,10 @@ ICAO 辅助机位引入线|ICAO auxiliary stand lead-in
 车道分界线|Lane Divider
 行车方向箭头|Traffic Direction Arrow
 直升机坪|Helipad
+引入线中线单编号|Single number on lead-in
+默认机位编号|Default stand numbers
+机位编号标识|Stand number marking
+风速计|Anemometer
 操作失败|Operation Failed
 文件类型|File Type
 保存工程|Save Project
@@ -639,6 +653,21 @@ def catalog_text(text):
         if result!=text:return result
     return EN.get(text,text)
 
+
+EN.update({
+    '统计信息': 'Project statistics',
+    '部件类型': 'Component type',
+    '数量': 'Count',
+    '统计计算失败': 'Could not calculate statistics',
+    '正在统计工程部件和灯具…': 'Counting project components and lights…',
+    '机场部件': 'Airport components',
+    '连接关系': 'Connections',
+    '标志与标记牌': 'Markings and signs',
+    '已布置航图符号': 'Placed chart symbols',
+    '灯具（盏）': 'Light fixtures',
+    '统计范围为整个工程。灯具按启用的布设方案计数，包含临时关闭区域。':
+        'Counts cover the entire project. Enabled lighting layouts include temporarily closed areas.',
+})
 
 SIDEBAR_PATTERNS=tuple((re.compile(pattern),key) for pattern,key in (
     (r'审阅 · (\d+) 项问题 / (\d+) 项待核','审阅 · %1 项问题 / %2 项待核'),

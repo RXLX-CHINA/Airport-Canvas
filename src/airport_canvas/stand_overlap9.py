@@ -50,13 +50,16 @@ def derived(marks,merge_pairs=()):
 
 def paint_boundaries(items,marks):
     from marking_standards import outside_segments
+    from geometry11 import STRtree,LineString,polygon
     safety=safety_marks(marks);lookup={a['id']:a for a in safety};out=[]
+    tree=STRtree([polygon(a['points']) for a in safety])
     for item in items:
         a=lookup.get(item.get('oid'))
         if not a or item['type']!='line' or item.get('ga_longitudinal_edge') is False:
             out.append(item)
             continue
-        polygons=[b['points'] for b in safety if b['id']!=a['id']]
+        polygons=[safety[i]['points'] for i in sorted(tree.query(LineString(item['points'])))
+                  if safety[i]['id']!=a['id']]
         length=g.length(item['points']);outside=list(outside_segments(item['points'],polygons));inside=[];cursor=0
         for points,station in outside:
             if station>cursor+1e-7:inside.append((cursor,station))
@@ -99,7 +102,8 @@ def overlap_regions(scene,marks,merged_only=False):
 
 def dash_stand_overlaps(scene,items,marks):
     from geometry11 import LineString,Point,lines,unary_union
-    choices=scene.data['meta'].get('dashed_stand_overlaps',{})
+    meta=scene.data['meta']
+    choices=meta.get('dashed_stand_overlaps',{}).keys()-meta.get('merged_stand_overlaps',{}).keys()
     if not choices:return items
     masks={}
     for pair,shape in overlap_regions(scene,marks).items():
@@ -137,7 +141,8 @@ def clip_merged_stand_lines(scene,items,marks):
         owner=mark.get('owner') or oid
         mask=masks.get(owner)
         stand=scene.assets.get(owner,{}).get('props',{})
-        if stand.get('ga_stand') and not item.get('ga_longitudinal_edge'):
+        safety=mark.get('props',{}).get('mark_type')=='STAND_SAFETY'
+        if stand.get('ga_stand') and not safety and not item.get('ga_longitudinal_edge'):
             result.append(item)
             continue
         if mask is None or item['type'] not in ('line','polygon') or not item.get('stroke'):
@@ -146,9 +151,9 @@ def clip_merged_stand_lines(scene,items,marks):
         points=item['points']
         polygon_outline=item['type']=='polygon'
         path=LineString(points+[points[0]] if polygon_outline else points)
-        if item.get('ga_longitudinal_edge'):
-            # A flat cap at the merge boundary cannot cover the transverse paint.
-            mask=mask.buffer(item.get('width',.25)/2,join_style=2)
+        if safety or item.get('ga_longitudinal_edge'):
+            # Remove the full painted stroke at the seam, including dashed strokes.
+            mask=mask.buffer(item.get('width',.25)/2+1e-7,join_style=2)
         if not path.intersects(mask):
             result.append(item)
             continue

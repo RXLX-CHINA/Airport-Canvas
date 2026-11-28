@@ -28,6 +28,7 @@ class ChartView:
         self.draft=[]
         self.hover=None
         self.symbol_drag=None
+        self.vertex_drag=None
         self.buttons={}
         for kind in chart.SYMBOLS:
             button=W.QPushButton(tr(chart.TYPES[kind][0]))
@@ -72,9 +73,7 @@ class ChartView:
             self.leave()
             return 'break'
         app=self.app
-        if app.lighting_view.active:app.lighting_view.leave(redraw=False)
-        if app._color17:app.toggle_color17(False)
-        app.set_mode('SELECT')
+        app.prepare_display_mode()
         app.select(None)
         self.active=True
         self.selection_scene=self.scene
@@ -82,8 +81,6 @@ class ChartView:
         self.previous=self.tabs.currentWidget()
         self.tabs.setTabVisible(self.index,True)
         self.tabs.setCurrentIndex(self.index)
-        for tab in app.lighting_view.original_tabs:
-            self.tabs.setTabVisible(self.tabs.indexOf(tab),False)
         parent=self.right.parentWidget()
         option=C.Qt.FindChildOption.FindDirectChildrenOnly
         self.hidden=[w for w in parent.findChildren(W.QWidget,options=option) if w is not self.right and not w.isHidden()]
@@ -114,7 +111,7 @@ class ChartView:
         if self.previous in self.app.lighting_view.original_tabs:self.tabs.setCurrentWidget(self.previous)
         self.tabs.setTabVisible(self.index,False)
         c=self.app.canvas
-        for tag in ('chart_f8_labels','chart_f8_badge','chart_f8_preview','frame11'):c.delete(tag)
+        for tag in ('chart_f8_labels','chart_f8_badge','chart_f8_preview','chart_f8_selected_vertex','frame11'):c.delete(tag)
         c.itemconfigure('chart_f8_surface',state='hidden')
         c.itemconfigure('map',state='normal')
         c.camera21(self.app.origin,self.app.zoom)
@@ -125,14 +122,19 @@ class ChartView:
 
     def choose(self,kind,focus=True):
         self.cancel_symbol_drag()
+        if focus:self.app.use_display_tools()
         self.tool=kind
         self.rvr_draft=None
         with C.QSignalBlocker(self.shape):
-            open_index=self.shape.findData('open_line')
-            if kind in chart.BOUNDARIES and open_index<0:
-                self.shape.addItem(tr('开放折线'),'open_line')
-            elif kind not in chart.BOUNDARIES and open_index>=0:
-                self.shape.removeItem(open_index)
+            if kind in chart.BOUNDARIES:
+                if self.shape.findData('open_curve')<0:
+                    self.shape.addItem(tr('开放折线'),'open_line')
+                    self.shape.addItem(tr('开放曲线'),'open_curve')
+                    self.shape.setCurrentIndex(self.shape.findData('open_curve'))
+            else:
+                for shape in chart.OPEN_SHAPES:
+                    index=self.shape.findData(shape)
+                    if index>=0:self.shape.removeItem(index)
         self.draft=[]
         self.hover=None
         for key,button in self.buttons.items():button.setChecked(key==kind)
@@ -143,8 +145,8 @@ class ChartView:
         if self.active:self.properties()
         if focus:
             if kind=='RVR':hint=tr('RVR：点击确认跑道中线上的位置。')
-            elif kind=='HS':
-                hint='点击顶点，按 Enter 完成' if self.shape.currentData() in ('polygon','rounded_polygon','open_line') else '点击起点和终点'
+            elif kind=='HS' or kind in chart.BOUNDARIES:
+                hint='点击顶点，按 Enter 完成' if self.shape.currentData() in ('polygon','rounded_polygon',*chart.OPEN_SHAPES) else '点击起点和终点'
             else:hint='点击放置，可吸附跑道中点' if kind=='ARP' else '点击放置' if kind else '选择航图对象'
             self.app.status.set(hint)
             self.app.canvas.focus_set()
@@ -159,7 +161,7 @@ class ChartView:
         if self.tool!='ARP':return point,None
         options=[]
         for aid,asset in self.scene.assets.items():
-            if asset['kind']!='RUNWAY':continue
+            if asset['kind']!='RUNWAY' or not self.app.can_edit_object(aid):continue
             midpoint=g.at(asset['points'],g.length(asset['points'])/2)[0]
             options.append((math.dist((x,y),self.app.screen(midpoint)),aid,midpoint))
         if options:
@@ -176,7 +178,7 @@ class ChartView:
 
     def rvr_candidate(self,point):
         if self.rvr_draft is None:
-            return chart.snap_rvr(self.scene,point,18/max(.001,self.app.zoom))
+            return chart.snap_rvr(self.scene,point,18/max(.001,self.app.zoom),self.app.can_edit_object)
         return chart.rvr_placement(self.scene,self.rvr_draft,point,face='rvr_gap' in self.rvr_draft)
 
     def place_rvr_step(self,point):
@@ -221,14 +223,14 @@ class ChartView:
             c.create_line(x-8,y,x+8,y,fill=ink,width=1,tags=tag)
             c.create_line(x,y-8,x,y+8,fill=ink,width=1,tags=tag)
             if self.tool=='RUNWAY_GUARD':
-                geometry=chart.snap_guard(self.scene,point)
+                geometry=chart.snap_guard(self.scene,point,self.app.can_edit_object)
                 if geometry:
                     for path in chart.guard_paths(*geometry):
                         c.create_line(*[v for p in path for v in self.app.screen(p)],fill=ink,width=2,tags=tag)
             if not self.draft:return
             mode=self.shape.currentData()
             vertices=[*self.draft,point]
-            path=vertices if mode=='open_line' else chart.hotspot_path(mode,vertices)
+            path=chart.hotspot_path(mode,vertices)
             if len(path)>1:c.create_line(*[v for p in path for v in self.app.screen(p)],fill='#e6780a',width=2,dash=(5,3),tags=tag)
             for px,py in map(self.app.screen,self.draft):
                 c.create_oval(px-3,py-3,px+3,py+3,outline='#e6780a',fill='white',width=2,tags=tag)
@@ -253,11 +255,11 @@ class ChartView:
         from shapely.geometry import LineString,Polygon
         mode=self.shape.currentData()
         if len(self.draft)<(3 if mode.endswith('polygon') else 2):return 'break'
-        path=self.draft if mode=='open_line' else chart.hotspot_path(mode,self.draft)
-        shape=LineString(path) if mode=='open_line' else Polygon(path)
-        if not shape.is_valid or not shape.is_simple or shape.length<.01 or (mode!='open_line' and shape.area<.01):
+        path=chart.hotspot_path(mode,self.draft)
+        shape=LineString(path) if mode in chart.OPEN_SHAPES else Polygon(path)
+        if not shape.is_valid or not shape.is_simple or shape.length<.01 or (mode not in chart.OPEN_SHAPES and shape.area<.01):
             self.app.status.set(tr('请绘制有效且不自交的边界。'))
-            if mode not in ('polygon','rounded_polygon','open_line'):self.draft=self.draft[:1]
+            if mode not in ('polygon','rounded_polygon',*chart.OPEN_SHAPES):self.draft=self.draft[:1]
             return 'break'
         center=shape.centroid
         self.place_symbol(self.tool,[center.x,center.y],shape=mode,vertices=self.draft.copy())
@@ -268,7 +270,8 @@ class ChartView:
         number=next(n for n in range(1,len(symbols)+2)
                     if all(item.get('label')!=f'HS{n}' for item in symbols.values()))
         oid='chart:'+uuid4().hex[:12]
-        caption=f'HS{number}' if kind=='HS' else kind
+        caption=f'HS{number}' if kind=='HS' else 'TWR' if kind=='TOWER' else kind
+        caption={'HELIPAD':'H','ANEMOMETER':'ANEM'}.get(kind,caption)
         if kind=='RVR':
             taken={item.get('label') for item in symbols.values() if item['kind']=='RVR'}
             caption=next((letter for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' if letter not in taken),'A')
@@ -318,6 +321,7 @@ class ChartView:
         from geometry11 import polygon
         self.key=key
         self.items,self.kinds=chart.chart_items(self.scene,self.app.render_items)
+        self.visible_owners={item['oid'] for item in self.items}
         self.shapes=[item for item in self.items if item['type']!='text']
         self.kinds_by_owner={item['oid']:item['chart_kind'] for item in self.items if 'chart_kind' in item}
         shapes=[]
@@ -331,7 +335,7 @@ class ChartView:
         self.hit_tree=STRtree(shapes)
         self.hit_owners=owners
 
-    def redraw(self):
+    def redraw(self,editing=False):
         if self.selection_scene is not self.scene:
             self.selection_scene=self.scene
             self.selected=None
@@ -403,7 +407,7 @@ class ChartView:
                 self.labels.append((frame,oid))
         c.create_text(c.winfo_width()-16,16,text=tr('航图模式 · F8'),anchor='ne',fill='#262626',
                       font=('Microsoft YaHei UI',11,'bold'),tags='chart_f8_badge')
-        self.selection_frame()
+        if not editing:self.selection_frame()
         self.draw_preview()
 
     def selection_frame(self):
@@ -419,28 +423,32 @@ class ChartView:
         box=c.bbox(*ids,visible_only=True) if ids else None
         if box:self.app.draw_frame11(screen_box=box)
         target=getattr(self,'selected_vertex',None)
-        if target and target[0]==self.selected:
-            vertices=self.config().get('symbols',{}).get(self.selected,{}).get('vertices',[])
-            if target[1]<len(vertices):
-                x,y=self.app.screen(vertices[target[1]])
-                c.create_oval(x-6,y-6,x+6,y+6,outline='#ff9300',width=2,tags='chart_f8_selected_vertex')
+        if self.app.mode=='NODES':
+            symbol=self.config().get('symbols',{}).get(self.selected)
+            if symbol:
+                vertices=symbol.get('vertices') or [chart.symbol_point(self.scene,symbol)]
+                for index,point in enumerate(vertices):
+                    x,y=self.app.screen(point)
+                    fill='#ff9300' if target==(self.selected,index) else '#ffffff'
+                    c.create_oval(x-5,y-5,x+5,y+5,fill=fill,outline='#087f60',
+                                  width=2,tags='chart_f8_selected_vertex')
 
     def edge_node_target(self,x,y):
         from node_interaction20_8 import edge_insertion
-        if self.tool:return
+        if self.tool or self.app.mode!='NODES':return
         point=self.app.world(x,y)
         oid=self.selected or self.pick(point,x,y)
         item=self.config().get('symbols',{}).get(oid,{})
         shape=item.get('shape')
-        if shape in ('polygon','rounded_polygon','open_line'):
+        if shape in ('polygon','rounded_polygon',*chart.OPEN_SHAPES):
             vertices=list(item['vertices'])
-            hit=edge_insertion(vertices,point,10/max(.001,self.app.zoom),shape!='open_line')
+            hit=edge_insertion(vertices,point,10/max(.001,self.app.zoom),shape not in chart.OPEN_SHAPES)
             if hit:return hit[1],oid,item,vertices,hit[0]
 
     def click(self,event):
         x,y=event.x,event.y
         point=self.app.world(x,y)
-        if not self.tool and getattr(event,'state',0)&8:
+        if not self.tool and self.app.mode=='NODES' and getattr(event,'state',0)&8:
             hit=self.edge_node_target(x,y)
             if hit:
                 q,oid,item,vertices,index=hit
@@ -453,11 +461,11 @@ class ChartView:
             point,runway=self.snap(x,y)
             if self.tool in chart.AREA_TOOLS:
                 if not self.draft or math.dist(point,self.draft[-1])>.01:self.draft.append(list(point))
-                if self.shape.currentData() not in ('polygon','rounded_polygon','open_line') and len(self.draft)>=2:return self.finish()
+                if self.shape.currentData() not in ('polygon','rounded_polygon',*chart.OPEN_SHAPES) and len(self.draft)>=2:return self.finish()
                 self.draw_preview()
                 return 'break'
             if self.tool=='RUNWAY_GUARD':
-                geometry=chart.snap_guard(self.scene,point)
+                geometry=chart.snap_guard(self.scene,point,self.app.can_edit_object)
                 if geometry is None:
                     self.app.status.set(tr('请点击滑行道放置跑道警戒灯。'))
                     return 'break'
@@ -470,13 +478,14 @@ class ChartView:
             return 'break'
         self.selected_vertex=None
         selected=self.config().get('symbols',{}).get(self.selected,{})
-        if selected.get('shape') in ('polygon','rounded_polygon','open_line'):
+        if self.app.mode=='NODES' and selected.get('vertices'):
             candidates=[(math.dist((x,y),self.app.screen(vertex)),i)
                         for i,vertex in enumerate(selected['vertices'])]
             if candidates:
                 distance,index=min(candidates)
                 if distance<=9:
                     self.selected_vertex=(self.selected,index)
+                    self.vertex_drag=(self.scene,self.selected,index,(x,y))
                     self.selection_frame()
                     return 'break'
         elevation_end=None
@@ -500,10 +509,16 @@ class ChartView:
         return 'break'
 
     def cancel_symbol_drag(self):
-        self.symbol_drag=None
+        self.symbol_drag=self.vertex_drag=None
         self.app.canvas.delete('chart_f8_drag')
 
     def drag_symbol(self,event):
+        if self.vertex_drag:
+            canvas=self.app.canvas
+            canvas.delete('chart_f8_drag')
+            x,y=event.x,event.y
+            canvas.create_oval(x-6,y-6,x+6,y+6,outline='#087f60',width=2,tags='chart_f8_drag')
+            return 'break'
         drag=self.symbol_drag
         if drag and math.dist(drag[2],(event.x,event.y))>=4:
             mouse=self.app.world(event.x,event.y)
@@ -512,7 +527,7 @@ class ChartView:
             canvas.delete('chart_f8_drag')
             symbol=self.config().get('symbols',{}).get(drag[1],{})
             if symbol.get('kind')=='RVR':
-                binding=chart.snap_rvr(self.scene,point,max(symbol.get('rvr_gap',12),18/max(.001,self.app.zoom)))
+                binding=chart.snap_rvr(self.scene,point,max(symbol.get('rvr_gap',12),18/max(.001,self.app.zoom)),self.app.can_edit_object)
                 if not binding:return 'break'
                 point,_=chart.rvr_pose(self.scene,{**symbol,**binding,'point':point})
             x,y=self.app.screen(point)
@@ -520,6 +535,21 @@ class ChartView:
         return 'break'
 
     def release_symbol(self,event):
+        vertex=self.vertex_drag
+        if vertex:
+            self.cancel_symbol_drag()
+            scene,oid,index,press=vertex
+            symbol=self.config().get('symbols',{}).get(oid)
+            if scene is self.scene and symbol and math.dist(press,(event.x,event.y))>=3:
+                vertices=list(symbol['vertices'])
+                vertices[index]=self.app.world(event.x,event.y)
+                if symbol['shape'] not in chart.OPEN_SHAPES:
+                    try:__import__('polygon_edit20_7').checked(vertices)
+                    except ValueError as exc:
+                        self.app.status.set(str(exc))
+                        return 'break'
+                self.change('symbols',oid,dict(symbol,vertices=vertices))
+            return 'break'
         drag=self.symbol_drag
         self.cancel_symbol_drag()
         if not drag:return 'break'
@@ -531,13 +561,13 @@ class ChartView:
         delta=[end-begin for end,begin in zip(mouse,start)]
         value=dict(symbol,point=[p+d for p,d in zip(anchor,delta)])
         if symbol['kind']=='RUNWAY_GUARD':
-            snapped=chart.snap_guard(self.scene,value['point'])
+            snapped=chart.snap_guard(self.scene,value['point'],self.app.can_edit_object)
             if snapped is None:
                 self.app.status.set(tr('请点击滑行道放置跑道警戒灯。'))
                 return 'break'
             value['point'],value['transverse'],value['width']=snapped
         if symbol['kind']=='RVR':
-            binding=chart.snap_rvr(self.scene,value['point'],max(symbol.get('rvr_gap',12),18/max(.001,self.app.zoom)))
+            binding=chart.snap_rvr(self.scene,value['point'],max(symbol.get('rvr_gap',12),18/max(.001,self.app.zoom)),self.app.can_edit_object)
             if not binding:return 'break'
             value.update(binding)
             value['point'],_=chart.rvr_pose(self.scene,value)
@@ -580,7 +610,7 @@ class ChartView:
         if target and target[0]==oid:
             symbol=self.config().get('symbols',{}).get(oid,{})
             vertices=list(symbol.get('vertices',()))
-            closed=symbol.get('shape')!='open_line'
+            closed=symbol.get('shape') not in chart.OPEN_SHAPES
             if len(vertices)<=(3 if closed else 2):
                 self.app.status.set(tr('已达到此对象的最少节点数。'))
                 return 'break'

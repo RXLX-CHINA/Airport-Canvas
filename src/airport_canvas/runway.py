@@ -43,7 +43,9 @@ def aim_dimensions(lda,mark_width=None,inner_gap=None,mark_length=None):
 
 def threshold_geometry(width):
     counts={18:4,23:6,30:8,45:12,60:16}
-    n=counts.get(width,max(2,2*round(min(width,60)/3.6)))
+    # Table 6.2.4-1 ends at 16 total stripes. For unlisted widths,
+    # approximate the 1.8 m stripe-and-gap spacing without exceeding that count.
+    n=counts.get(width,min(counts[60],max(2,2*round(width/7.2))))
     stripe=min(1.8,min(width,54)/(2*n))
     if stripe<=0: raise ValueError('Width too small for threshold markings')
     # Central gap is twice the ordinary gap, all measured between stripe edges.

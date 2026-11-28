@@ -191,6 +191,8 @@ class CurveEditor(LiveEditor):
                 ttk.Label(self.property_body,text=text,wraplength=250,padding=8).pack(fill='x')
             if a['kind']=='STAND':
                 section=self.section('机位引入线与机型包络')
+                self.property_field(section,'single_lead_number','引入线中线单编号',p.get('single_lead_number',False),'bool')
+                self.property_field(section,'crossing_stand_numbers','交汇转入弧线显示机位编号',p.get('crossing_stand_numbers',True),'bool')
                 self.property_field(section,'lead_type','引入线类型',p.get('lead_type','A'),'radio',['A','B','C','D','ICAO'])
                 for key,label,default in [('lead_radius','引入转弯半径 m',20),('aircraft_length','飞机长度 m',40),('aircraft_span','飞机翼展 m',36),('fuselage_width','机身宽度 m',4),('wing_station','机翼距机头 m',18),('safety_clearance','包络净距 m',4.5)]:self.property_field(section,key,'机位直径 m' if key=='aircraft_span' and p.get('helicopter_stand') else label,p.get(key,default))
             if a['kind']=='RUNWAY':

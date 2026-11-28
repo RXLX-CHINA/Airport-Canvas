@@ -158,11 +158,33 @@ class Editor14(Editor13):
                 if 'S' in kind:y0=min(y1-.2,y0+dy)
                 d['target']=(x0,y0,x1,y1);sx=(x1-x0)/max(.01,box[2]-box[0]);sy=(y1-y0)/max(.01,box[3]-box[1]);transform=lambda q:[x0+(q[0]-box[0])*sx,y0+(q[1]-box[1])*sy]
             self.canvas.delete('preview14');points=[]
-            for item in d['items'][:300]:
-                if item['type']=='text' or item.get('black_underlay'):continue
-                pts=[transform(q) for q in item['points']];points.extend(pts)
-                if item['type']=='polygon':pts=pts+[pts[0]]
-                if len(pts)>1:self.canvas.create_line(*[z for p in g.simplify(pts,.8/max(.001,self.zoom)) for z in self.screen(p)],fill='#00a7c2',width=1,tags='preview14')
+            tolerance=.8/max(.001,self.zoom)
+            if kind=='MOVE':
+                cached=d.get('preview_paths')
+                if not cached or cached[0]!=tolerance:
+                    paths=[]
+                    for item in d['items'][:300]:
+                        if item['type']=='text' or item.get('black_underlay'):continue
+                        pts=item['points']
+                        if item['type']=='polygon':pts=[*pts,pts[0]]
+                        if len(pts)>1:paths.append(g.simplify(pts,tolerance))
+                    cached=d['preview_paths']=(tolerance,paths)
+                for path in cached[1]:
+                    pts=[transform(q) for q in path]
+                    self.canvas.create_line(*[z for p in pts for z in self.screen(p)],
+                                            fill='#00a7c2',width=1,tags='preview14')
+            else:
+                for item in d['items'][:300]:
+                    if item['type']=='text' or item.get('black_underlay'):continue
+                    pts=[transform(q) for q in item['points']]
+                    points.extend(pts)
+                    if item['type']=='polygon':pts=pts+[pts[0]]
+                    if len(pts)>1:
+                        self.canvas.create_line(*[z for p in g.simplify(pts,tolerance) for z in self.screen(p)],
+                                                fill='#00a7c2',width=1,tags='preview14')
+            if kind=='MOVE':
+                x0,y0,x1,y1=box
+                points=[transform(q) for q in ((x0,y0),(x0,y1),(x1,y0),(x1,y1))]
             if points:self.draw_frame11((min(p[0] for p in points),min(p[1] for p in points),max(p[0] for p in points),max(p[1] for p in points)))
             if d['snap']:
                 x,y=self.screen(d['snap'][3]);self.canvas.create_oval(x-8,y-8,x+8,y+8,outline='#d9388b',width=2,tags='preview14')

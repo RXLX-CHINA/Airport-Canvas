@@ -152,9 +152,10 @@ def routes(scene):
     if not scene._transaction_depth:scene._guidance20=(key,base)
     return base
 
-def snap(scene,q,tolerance):
+def snap(scene,q,tolerance,visible=None):
     rows=[]
     for aid,a in routes(scene).items():
+        if visible and not all(visible(key) for key in a['props'].get('guidance_parents',(aid,))):continue
         hit=project_visible(a,q)
         if hit and hit[0]<=tolerance:rows.append((hit[0],aid,hit[1],hit[2]))
     return min(rows,key=lambda x:x[0]) if rows else None

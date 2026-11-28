@@ -210,8 +210,10 @@ class Editor13(Editor12):
                 self.select(None)
                 self.scene = scene
                 self.filepath = Path(p)
-                self.saved = json.dumps(self.scene.data,sort_keys=True)
+                self.saved = copy.deepcopy(self.scene.data)
                 self.selection = None
+                prepare=getattr(self,'prepare_project_frame',None)
+                if prepare:prepare()
                 self.set_mode('SELECT')
                 self.refresh()
                 self.fit()
@@ -229,7 +231,7 @@ class Editor13(Editor12):
             p=acp_path(chosen)
         try:
             with getattr(self,'processing',nullcontext)('正在保存机场工程'):
-                self.scene.save(p);self.filepath=Path(p);self.saved=json.dumps(self.scene.data,sort_keys=True);self.update_title();self.status.set('已保存 '+str(p));return True
+                self.scene.save(p);self.filepath=Path(p);self.saved=copy.deepcopy(self.scene.data);self.update_title();self.status.set('已保存 '+str(p));return True
         except (OSError,ValueError) as exc:messagebox.showerror('保存失败',str(exc),parent=self);return False
     def demo10(self):Editor13(AirportScene.load(Path(__file__).with_name('example_editor13.ACP')))
     def help(self):

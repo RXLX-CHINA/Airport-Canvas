@@ -126,6 +126,9 @@ class ViewTools(C.QObject):
         for kind,label,_ in TEMPLATES:self.kind.addItem(tr(label),kind)
         self.kind.currentIndexChanged.connect(self.reset_anchor)
         layout.addWidget(self.kind)
+        draw=W.QPushButton(tr('绘制标识'),self.bar.q)
+        draw.clicked.connect(lambda:self.start(self.kind.currentData()))
+        layout.addWidget(draw)
         self.side = W.QComboBox(self.bar.q)
         for label,value in (('右侧','RIGHT'),('左侧','LEFT'),('两侧','BOTH')):
             self.side.addItem(tr(label),value)
@@ -217,10 +220,9 @@ class ViewTools(C.QObject):
         if self.active:
             self.exit()
         else:
-            if self.app._color17:
-                self.app.toggle_color17(False)
-            self.app.set_mode('SELECT')
+            self.app.prepare_display_mode()
             self.active = True
+            self.app.set_mode('SELECT')
             self.caption.setText(tr('标识编辑  F5'))
             self.bar.pack(fill='x',before=self.app._body11)
             self.reset_anchor()
@@ -241,6 +243,7 @@ class ViewTools(C.QObject):
         self.app.redraw()
 
     def start(self,kind):
+        if self.active:self.app.use_display_tools()
         self.drawing=True
         self.caption.setText('目的地与方向标识与标记牌' if not self.active else '标识编辑  F5')
         self.bar.pack(fill='x',before=self.app._body11)
@@ -421,6 +424,7 @@ class ViewTools(C.QObject):
         elif kind=='RUNWAY_EXIT':
             network={a['id']:a for a in app.scene.assets.values() if a['kind']=='RUNWAY'}
         tolerance = 13/app.zoom
+        network={aid:axis for aid,axis in network.items() if app.can_edit_object(aid)}
         hits = sorted((g.project(axis['points'],q)[0],aid) for aid,axis in network.items())
         if self.anchor is None:
             from guidance20 import snap_axis
@@ -429,7 +433,7 @@ class ViewTools(C.QObject):
                 pointer=set(app.canvas.find_overlapping(e.x-3,e.y-3,e.x+3,e.y+3))
                 for mark in app.scene.assets.values():
                     props=mark['props']
-                    if props.get('information_profile20_18')=='PAVEMENT' and props.get('sign_target21_2'):
+                    if app.can_edit_object(mark['id']) and props.get('information_profile20_18')=='PAVEMENT' and props.get('sign_target21_2'):
                         if pointer.intersection(app.canvas.find_withtag('owner:'+mark['id'])):
                             app.select(mark['id'])
                             self.append_branch()

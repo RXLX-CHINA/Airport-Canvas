@@ -41,7 +41,7 @@ def holding_plan(scene,mid):
                 source=SOURCE,hold_count=1,type='A_CANDIDATE',
                 reason='候选位置；未核验表4.12.6全部条件、保护区、航空器扫掠及原图尺寸')
 
-def validate_scene(scene):
+def validate_scene(scene, *, generated=None):
     scene.validate_structure();issues=[]
     def issue(oid,status,rule,message,source='软件数据/几何约束',actual=None,required=None):
         issues.append(dict(object_id=oid,status=status,rule=rule,message=message,source=source,actual=actual,required=required))
@@ -69,7 +69,7 @@ def validate_scene(scene):
         if kind=='RUNWAY':
             from runway import aim_dimensions,threshold_geometry
             count,stripe=threshold_geometry(p['width'])
-            issue(aid,'PASS' if 0<=p['width']/2-count*stripe<=3 or p['width']>60 else 'REVIEW_REQUIRED','THRESHOLD_EDGE','入口条纹数量与横向范围检查；靠近边线本身并不代表错误。','6.2.4',round(p['width']/2-count*stripe,3),'边缘距离≤3 m；宽跑道另受27 m半宽限制')
+            issue(aid,'PASS' if -1e-8<=p['width']/2-count*stripe<=max(3.,p['width']/2-27.)+1e-8 else 'REVIEW_REQUIRED','THRESHOLD_EDGE','入口条纹数量与横向范围检查；靠近边线本身并不代表错误。','6.2.4',round(p['width']/2-count*stripe,3),'边缘距离≤3 m；宽跑道另受27 m半宽限制')
             for end in ('a','b'):
                 lda=p.get('lda_'+end) or g.length(a['points'])-p.get('displaced_'+end,0)
                 _,length,width,gap=aim_dimensions(lda,p.get('aim_width_'+end),p.get('aim_gap_'+end),p.get('aim_length_'+end))
@@ -172,7 +172,7 @@ def validate_scene(scene):
     from automatic_markings import generated_markings
     from marking_standards import marking_checks
     from audit9 import checks
-    generated=generated_markings(scene)
+    if generated is None:generated=generated_markings(scene)
     issues.extend(marking_checks(scene,generated))
     issues.extend(checks(scene,generated))
     from deice11 import checks as deice_checks

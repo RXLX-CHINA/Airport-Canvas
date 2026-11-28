@@ -207,11 +207,13 @@ class LayoutDialog(W.QDialog):
         self.view=view
         self.setWindowTitle('航图排版 · F8')
         view.ensure()
-        self.items,self.kinds=view.items,view.kinds
+        config=view.config().get('page',{})
+        self.angle=config.get('airport_rotation',0.)
+        self.source_items,self.kinds=view.items,view.kinds
+        self.items=chart.layout_items(self.source_items,self.angle)
         self.full=chart.fit_extent(self.items)
         self.region=chart.saved_region(view.scene,self.items)
         self.base_region=self.region
-        config=view.config().get('page',{})
         self.positions=dict(config.get('positions',{}))
         self.history=[]
         self.history_index=-1
@@ -269,6 +271,13 @@ class LayoutDialog(W.QDialog):
             control.currentIndexChanged.connect(self.render_page)
             self.selectors[key]=control
             form.addRow(caption,control)
+        self.rotation=W.QDoubleSpinBox()
+        self.rotation.setRange(-180.,180.)
+        self.rotation.setDecimals(1)
+        self.rotation.setSuffix(' °')
+        self.rotation.setValue(self.angle)
+        self.rotation.editingFinished.connect(self.render_page)
+        form.addRow(tr('机场主体旋转角度'),self.rotation)
         self.legend_count=W.QSpinBox()
         self.legend_count.setRange(1,6)
         self.legend_count.setValue(int(config.get('legend_count',2)))
@@ -339,7 +348,8 @@ class LayoutDialog(W.QDialog):
         values={key:edit.text().strip() for key,edit in self.controls.items()}
         values.update({key:edit.toPlainText().strip() for key,edit in self.frequencies.items()})
         values.update({key:control.currentData() for key,control in self.selectors.items()})
-        values.update(legend_count=self.legend_count.value(),positions=self.positions.copy())
+        values.update(legend_count=self.legend_count.value(),positions=self.positions.copy(),
+                      airport_rotation=self.rotation.value())
         values['changes']=self.changes.currentData()
         values['ident']=values['ident'].upper()
         if values['date']=='--':values['date']=''
@@ -381,7 +391,7 @@ class LayoutDialog(W.QDialog):
         self.base_region,info=self.history[index]
         self.replaying=True
         controls=[*self.controls.values(),*self.frequencies.values(),*self.selectors.values(),
-                  *self.options.values(),self.note,self.changes,self.legend_count]
+                  *self.options.values(),self.note,self.changes,self.legend_count,self.rotation]
         blockers=[C.QSignalBlocker(widget) for widget in controls]
         try:
             self.positions=info['positions'].copy()
@@ -392,6 +402,7 @@ class LayoutDialog(W.QDialog):
             self.note.setPlainText(info['note'])
             self.changes.setCurrentIndex(self.changes.findData(info['changes']))
             self.legend_count.setValue(info['legend_count'])
+            self.rotation.setValue(info['airport_rotation'])
             self.render_page()
         finally:
             for blocker in blockers:blocker.unblock()
@@ -427,6 +438,13 @@ class LayoutDialog(W.QDialog):
 
     def render_page(self):
         info=self.page_config()
+        angle=info['airport_rotation']
+        if angle!=self.angle:
+            self.angle=angle
+            self.items=chart.layout_items(self.source_items,angle)
+            self.full=chart.fit_extent(self.items)
+            self.navigation.load(self.items,self.full)
+            if not self.replaying:self.base_region=self.full
         self.remember(info)
         self.region=chart.adjust_region(self.base_region,info)
         self.navigation.ratio=chart.frame_aspect(info) if info['fit']=='crop' else None

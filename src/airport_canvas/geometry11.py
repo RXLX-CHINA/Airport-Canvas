@@ -79,10 +79,11 @@ def road_bend_patches(scene):
     extra=road_union(scene).difference(filled)
     result=[]
     from apron_ops20_18 import simple_parts
+    tree=STRtree([LineString(a['points']) for a in roads])
     for part in simple_parts(extra):
         if part.area<.00001:continue
         point=part.representative_point()
-        owner=min(roads,key=lambda a:g.project(a['points'],[point.x,point.y])[0])
+        owner=roads[int(min(tree.query_nearest(point)))]
         result.append(dict(oid=owner['id'],points=[list(p) for p in part.exterior.coords][:-1],
                            kind='ROAD',type='polygon',fill=owner['props'].get('pavement_color','#737b83'),
                            surface10=True))

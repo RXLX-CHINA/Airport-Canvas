@@ -61,7 +61,7 @@ def legacy_reverse_routes(scene):
     if cache and cache[0]==scene.revision and not scene._transaction_depth:return cache[1]
     result={}
     for aid,a in scene.assets.items():
-        if not a['props'].get('rapid_exit') or not a['props'].get('join_reverse_visible',True):continue
+        if not a['props'].get('rapid_exit') or a['props'].get('rapid_drawn_axis56') or not a['props'].get('join_reverse_visible',True):continue
         total=g.length(a['points']);links=[m for m in scene.movements.values() if m.get('legacy_attachment') and m['to']['asset']==aid]
         source=next((m for m in links if scene.assets[m['from']['asset']]['kind']=='RUNWAY'),None)
         receiver=next((m for m in links if scene.assets[m['from']['asset']]['kind'] in ('TAXIWAY','APRON_TAXIWAY','STAND_TAXILANE')),None)

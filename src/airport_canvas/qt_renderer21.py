@@ -5,6 +5,7 @@ No Pillow viewport uploads or per-segment Python redraws on camera movement.
 """
 import math,time
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 from PySide6 import QtCore as C,QtGui as G,QtWidgets as W
 Qt=C.Qt
@@ -21,13 +22,22 @@ class Camera:
     def __init__(self,canvas):self.canvas=canvas
     def transform(self):return self.canvas.q.viewportTransform()
 
+@lru_cache(maxsize=512)
+def base_glyph(family,text):
+    font=G.QFont(family)
+    font.setPixelSize(100)
+    font.setStyleStrategy(G.QFont.StyleStrategy.PreferAntialias)
+    path=G.QPainterPath()
+    path.addText(0,0,font,text)
+    return path,path.boundingRect()
+
+
 def glyph_path(e):
     from font_paths import font_path
     family='Microsoft YaHei UI';path=font_path(e.get('font','normal'))
     if path not in _fonts:
         identifier=G.QFontDatabase.addApplicationFont(str(path));families=G.QFontDatabase.applicationFontFamilies(identifier);_fonts[path]=families[0] if families else family
-    family=_fonts[path]
-    f=G.QFont(family);f.setPixelSize(100);f.setStyleStrategy(G.QFont.StyleStrategy.PreferAntialias);path=G.QPainterPath();path.addText(0,0,f,e.get('text',''));box=path.boundingRect()
+    path,box=base_glyph(_fonts[path],e.get('text',''))
     if box.isEmpty():return path
     height=max(.001,e.get('size',4));sy=height/box.height();sx=(e['text_width']/box.width()) if e.get('text_width') else sy;origin=e['points'][0];transform=G.QTransform();transform.translate(*origin);transform.rotate(float(e.get('rotation',0)));transform.scale(sx,-sy);transform.translate(-box.center().x(),-box.center().y());return transform.map(path)
 
@@ -85,14 +95,15 @@ class CanvasRenderer:
                         for p in points[1:]:path.lineTo(*p)
                         if part['type']=='polygon':path.closeSubpath()
                 q=old['q'] if old else W.QGraphicsPathItem()
-                if q.scene() is None:c.scene.addItem(q)
                 q.setPath(path);q.setZValue(index);stroke=e.get('stroke');fill=e.get('fill');width=max(.001,float(e.get('width',.15)))
                 if e['type']=='text':stroke=fill if e.get('black_outline') else None;fill=e.get('fill');width=max(.08,e.get('size',4)*.055)
                 pen=G.QPen(G.QColor('#151a20' if e.get('black_outline') and e['type']=='text' else stroke),width) if stroke else G.QPen(Qt.PenStyle.NoPen);pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin);pen.setCapStyle(Qt.PenCapStyle.RoundCap if e.get('round_caps') else Qt.PenCapStyle.FlatCap)
                 if e.get('cosmetic_pen'):pen.setCosmetic(True);pen.setWidthF(e.get('screen_weight',1.5))
                 if e.get('dash'):
                     pattern=list(e['dash']);pattern=pattern*2 if len(pattern)%2 else pattern;pen.setDashPattern([max(.001,x/width) for x in pattern]);pen.setDashOffset(e.get('dash_offset',0)/width)
-                q.setPen(pen);q.setBrush(G.QBrush(G.QColor(fill)) if fill else G.QBrush(Qt.BrushStyle.NoBrush));identifier=old['id'] if old else c.register_world(q,(self.tag,'owner:'+e['oid']));c.update_layer_opacity(identifier,e.get('opacity',1.));self._record_cache[key]=dict(q=q,id=identifier,data=data);self.metrics['path_updates']+=1
+                q.setPen(pen);q.setBrush(G.QBrush(G.QColor(fill)) if fill else G.QBrush(Qt.BrushStyle.NoBrush))
+                if q.scene() is None:c.scene.addItem(q)
+                identifier=old['id'] if old else c.register_world(q,(self.tag,'owner:'+e['oid']));c.update_layer_opacity(identifier,e.get('opacity',1.));self._record_cache[key]=dict(q=q,id=identifier,data=data);self.metrics['path_updates']+=1
                 for original_index in indices:self.draw_records[original_index]=q
             for key in set(self._record_cache)-keep:c.delete(self._record_cache.pop(key)['id'])
             self.items=items;self.metrics['rebuilds']+=1;self.metrics['last_build_ms']=(time.perf_counter()-start)*1000

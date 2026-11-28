@@ -42,15 +42,16 @@ def live_demo():
     scene.past.clear();return scene
 
 
-def build_frame(data,options):
+def build_frame(data,options,multicore=True):
     scene=AirportScene(data)
+    scene.multicore_enabled=multicore
     start=time.perf_counter()
     stand_designs={}
     generated=generated_markings(scene,stand_designs=stand_designs)
     items=display_list(scene,*options,generated=generated,stand_designs=stand_designs)
     return items,generated,crossings(scene),(time.perf_counter()-start)*1000
 
-def build_audit(data):return validate_scene(AirportScene(data))
+def build_audit(data,generated=None):return validate_scene(AirportScene(data),generated=generated)
 
 
 _RELEASE_TITLE=json.loads(Path(__file__).with_name('VERSION.json').read_text(encoding='utf-8'))['release']
@@ -64,7 +65,7 @@ class LiveEditor(EditorApp):
         self._zoom_after=None
         self._dirty_fields=set();self._inspector_token=0;self._renderer=None;self.auto_assets={};self._junctions=[]
         self._syncing_tree=False;self._selected_form=None;self._executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix='airport-geometry')
-        self._future=None;self._pending_frame=False;self._frame_key=None;self._drag_data=None
+        self._future=None;self._pending_frame=False;self._frame_key=None;self._asset_drag_active=None
         self._audit_executor=ThreadPoolExecutor(max_workers=1,thread_name_prefix='airport-audit');self._audit_future=None;self._audit_poll_after=None
         self.last_build_ms=0;self._closed=False
         self._last_edit=None;self._last_edit_time=0;self._field_controls={}
@@ -219,8 +220,22 @@ class LiveEditor(EditorApp):
             bar.pack_forget()
             text.pack_forget()
 
+    def prepare_project_frame(self):
+        self._fit_after_open=None
+        if not self._large_scene50():return
+        self.render_items=[]
+        self.auto_assets={}
+        self._junctions=[]
+        self._generated_revision=None
+        self._rendered_scene50=self.scene
+        self._fit_after_open=self.scene
+
     def refresh(self):
-        if getattr(self,'_rendered_scene50',None) is self.scene and self._large_scene50():
+        if getattr(self,'_rendered_scene50',None) is self.scene and (
+                self._large_scene50()
+                or any(a['kind']=='STAND' and a['props'].get('helicopter_stand')
+                       for a in self.scene.assets.values())
+                or any(a['props'].get('mark_type')=='HELIPAD' for a in self.auto_assets.values())):
             self.highlight_tool()
             self.update_inspector()
             self.update_title()
@@ -235,15 +250,17 @@ class LiveEditor(EditorApp):
 
     def rebuild_scene(self):
         self._frame_key=None;self.highlight_tool()
+        self.scene.multicore_enabled=getattr(self,'multicore_enabled',True)
         stand_designs={}
         self.auto_assets=generated_markings(self.scene,stand_designs=stand_designs)
         self.render_items=display_list(self.scene,*self.options(),generated=self.auto_assets,stand_designs=stand_designs)
         self._junctions=crossings(self.scene)
         self._rendered_scene50=self.scene
+        self._generated_revision=(self.scene,self.scene.revision)
         self.sync_tree();self.update_inspector();self.redraw();self.update_title();self.schedule_audit()
 
     def options(self):return self.labels.get(),self.facilities.get(),self.protection.get()
-    def current_frame_key(self):return id(self.scene),self.scene.revision,self.options()
+    def current_frame_key(self):return id(self.scene),self.scene.revision,self.options(),getattr(self,'multicore_enabled',True)
     def schedule_frame(self):
         self._pending_frame=True
         if self._render_after:self.after_cancel(self._render_after)
@@ -253,7 +270,7 @@ class LiveEditor(EditorApp):
         if self._future is not None:return
         key=self.current_frame_key();self._pending_frame=False;self._frame_key=key
         self.show_processing('frame','正在计算编辑预览')
-        self._future=self._executor.submit(build_frame,copy.deepcopy(self.scene.data),self.options())
+        self._future=self._executor.submit(build_frame,copy.deepcopy(self.scene.data),self.options(),getattr(self,'multicore_enabled',True))
         self._poll_after=self.after(10,self.poll_frame)
     def poll_frame(self):
         self._poll_after=None
@@ -265,8 +282,20 @@ class LiveEditor(EditorApp):
             frame=future.result()
             if self._frame_key==self.current_frame_key():
                 self.render_items,self.auto_assets,self._junctions,self.last_build_ms=frame
-                self.sync_tree();self.redraw()
-        except (ValueError,TypeError) as exc:self.property_error.configure(text='几何预览：'+str(exc))
+                self._generated_revision=(self.scene,self.scene.revision)
+                self.sync_tree()
+                if getattr(self,'_fit_after_open',None) is self.scene:
+                    self._fit_after_open=None
+                    self.fit()
+                    finish=getattr(self,'finish_project_loading',None)
+                    if finish:finish(painted=True)
+                else:self.redraw()
+        except (ValueError,TypeError) as exc:
+            if self._frame_key==self.current_frame_key() and getattr(self,'_fit_after_open',None) is self.scene:
+                self._fit_after_open=None
+                finish=getattr(self,'finish_project_loading',None)
+                if finish:finish()
+            self.property_error.configure(text='几何预览：'+str(exc))
         if self._pending_frame or self._frame_key!=self.current_frame_key():self.start_frame()
 
     def schedule_audit(self):
@@ -280,7 +309,9 @@ class LiveEditor(EditorApp):
             self.schedule_audit();return
         self._audit_key=(id(self.scene),self.scene.revision)
         self.show_processing('audit','正在审查机场工程')
-        self._audit_future=self._audit_executor.submit(build_audit,copy.deepcopy(self.scene.data));self._audit_poll_after=self.after(25,self.poll_audit)
+        generated=self.auto_assets if (
+            getattr(self,'_generated_revision',None)==(self.scene,self.scene.revision)) else None
+        self._audit_future=self._audit_executor.submit(build_audit,copy.deepcopy(self.scene.data),generated);self._audit_poll_after=self.after(25,self.poll_audit)
     def poll_audit(self):
         self._audit_poll_after=None
         if self._closed or self._audit_future is None:return
@@ -514,11 +545,12 @@ class LiveEditor(EditorApp):
     def pick(self,p,paths_only=False):
         if not paths_only:
             for aid,a in reversed(list(self.auto_assets.items())):
+                if not self.can_edit_object(aid):continue
                 for item in primitives(a):
                     if item['type']=='polygon' and item.get('fill') and g.inside(p,item['points']):return 0,aid,0,p
             from route_geometry import reverse_join
             for mid,m in self.scene.movements.items():
-                if m.get('geometry')=='RAPID' and m.get('reverse_join_pavement',True):
+                if self.can_edit_object(mid) and m.get('geometry')=='RAPID' and m.get('reverse_join_pavement',True):
                     branch=reverse_join(self.scene,m)
                     if branch:
                         d,station,q=g.project(branch['points'],p)
@@ -527,17 +559,20 @@ class LiveEditor(EditorApp):
 
     def click(self,e):
         self.apply_properties();super().click(e)
-        self._drag_data=copy.deepcopy(self.scene.data) if self.drag and self.selection in self.scene.assets else None
+        self._asset_drag_active=bool(self.drag and self.selection in self.scene.assets)
 
     def motion(self,e):
-        if self.drag and self._drag_data and self.selection in self.scene.assets:
+        if self.drag and self._asset_drag_active and self.selection in self.scene.assets:
             oid=self.selection
             point=self.world(e.x,e.y)
             self.drag['pending_point39']=point
             self.canvas.delete('asset_preview39')
             start=self.drag.get('start',point)
             delta=[point[k]-start[k] for k in (0,1)]
-            for aid in [oid,*descendants(self.scene,oid)]:
+            members=self.drag.get('preview_members')
+            if members is None:
+                members=self.drag['preview_members']=(oid,*descendants(self.scene,oid))
+            for aid in members:
                 a=self.scene.assets.get(aid)
                 if not a:continue
                 points=[[q[k]+delta[k] for k in (0,1)] for q in a['points']]
@@ -552,9 +587,9 @@ class LiveEditor(EditorApp):
         super().motion(e)
 
     def release(self,e):
-        if self.drag and self._drag_data:
+        if self.drag and self._asset_drag_active:
             drag=self.drag
-            self._drag_data=None
+            self._asset_drag_active=None
             self.drag=None
             self.canvas.delete('asset_preview39')
             point=drag.get('pending_point39')
@@ -563,6 +598,7 @@ class LiveEditor(EditorApp):
                 with self.scene.transaction('拖动对象或控制点'):
                     oid=self.selection
                     a=self.scene.assets[oid]
+                    affected={oid} if 'vertex' in drag else {oid,*descendants(self.scene,oid)}
                     if 'vertex' in drag:
                         old=g.length(a['points'])
                         a['points'][drag['vertex']]=point
@@ -575,7 +611,8 @@ class LiveEditor(EditorApp):
                         dx,dy=(point[k]-drag['start'][k] for k in (0,1))
                         self.scene.translate(oid,dx,dy)
                     for m in self.scene.movements.values():
-                        if m.get('geometry')=='RAPID':
+                        if m.get('geometry')=='RAPID' and any(
+                                m[side]['asset'] in affected for side in ('from','to')):
                             plan=rapid_layout(self.scene,m)
                             m['to'].update(station=plan['station'],direction=plan['direction'])
                 self.schedule_frame();self.update_inspector();self.schedule_audit();self.update_title()

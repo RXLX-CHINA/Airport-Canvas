@@ -164,10 +164,10 @@ def set_nodes(scene,aid,nodes):
         scene.assets[aid]['curve_nodes']=copy.deepcopy(nodes)
         scene.update_asset(aid,points=points)
 
-def snap(scene,p,tolerance,exclude=None):
+def snap(scene,p,tolerance,exclude=None,visible=None):
     from guidance20 import snap_axis
     kinds=('ROAD',) if exclude in scene.assets and scene.assets[exclude]['kind']=='ROAD' else TAXI_KINDS+('RUNWAY',)
-    assets={aid:a for aid,a in scene.assets.items() if aid!=exclude and a['kind'] in kinds}
+    assets={aid:a for aid,a in scene.assets.items() if aid!=exclude and a['kind'] in kinds and (visible is None or visible(aid))}
     return snap_axis(scene,p,assets,tolerance)
 
 
